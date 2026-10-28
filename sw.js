@@ -1,5 +1,5 @@
 // Liftlog offline cache. Bump VERSION when shipping changes.
-const VERSION = 'liftlog-v3';
+const VERSION = 'liftlog-v4';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png',

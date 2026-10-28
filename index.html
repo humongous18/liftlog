@@ -198,6 +198,22 @@ textarea.txt{min-height:80px;resize:vertical}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:8px;height:8px;border-radius:50%;background:var(--c)}
 
+/* calendar (scrolling months, FitNotes-style) */
+.cmonth{scroll-margin-top:calc(8px + env(safe-area-inset-top,0px));padding-bottom:6px}
+.cmh{text-align:center;font-family:var(--f-num);font-weight:600;font-size:24px;text-transform:uppercase;letter-spacing:.02em;margin:22px 0 12px}
+.cgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));row-gap:2px;max-width:560px;margin:0 auto}
+.cdow{text-align:center;font-size:13px;font-weight:600;color:var(--mute);padding-bottom:10px}
+.cday{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0 6px;min-width:0}
+.cday .n{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;font-size:20px;font-variant-numeric:tabular-nums}
+.cday.today .n{background:var(--blue);color:#fff;font-weight:600}
+.cday .dots{display:flex;gap:3px;height:7px}
+.cday .dots i{width:7px;height:7px;border-radius:50%;background:var(--c)}
+.calbar{position:sticky;z-index:5;bottom:var(--navh,0px);display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;margin:14px calc(-1 * max(16px, env(safe-area-inset-left,0px))) 0;padding:6px max(16px, env(safe-area-inset-left,0px));background:var(--tile);border-top:1px solid var(--hair)}
+@media (min-width:900px){.calbar{border-radius:14px;margin-inline:0}}
+.calbar b{text-align:center;font-family:var(--f-num);font-weight:600;font-size:19px;text-transform:uppercase;letter-spacing:.04em}
+.calbar .icon-btn{background:transparent;color:var(--link)}
+.calbar .icon-btn svg{width:26px;height:26px}
+
 /* charts */
 .chart{width:100%;min-width:0}
 .chart svg{display:block}
@@ -423,7 +439,7 @@ function derive(){
 const athleteIds = () => Object.keys(S.athletes).sort((a,b) => (S.athletes[a].created||0) - (S.athletes[b].created||0));
 const A = () => S.athletes[S.aid];
 // Per-profile switch: false hides readiness, strain and the morning check-in everywhere.
-const scoresOn = (aid = S.aid) => !(S.athletes[aid] && S.athletes[aid].scores === false);
+const scoresOn = (aid = S.aid) => !!(S.athletes[aid] && S.athletes[aid].scores === true);
 const unitOf = aid => (S.athletes[aid]||{}).unit || 'kg';
 const unit = () => unitOf(S.aid);
 
@@ -625,6 +641,8 @@ function render(){
   $('#main').innerHTML = html;
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === S.view));
   renderSheet(); drawCharts(); tick();
+  const nav = $('#nav'); document.documentElement.style.setProperty('--navh', (window.matchMedia && matchMedia('(min-width:900px)').matches ? 0 : nav.offsetHeight) + 'px');
+  if (S.view === 'calendar' && S.calJump && S.ready && athleteIds().length) { S.calJump = false; scrollToMonth(S.calMonth, false); }
 }
 let sheetKey = '';
 function renderSheet(){
@@ -678,7 +696,6 @@ function vTodayPlain(){
     <h2 style="margin-bottom:10px">This week</h2>
     <div class="figs" style="margin-bottom:18px"><div class="fig"><b>${wk.length}<small>/${goal}</small></b><span>workouts</span></div><div class="fig"><b>${wSets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(wVol,u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prWeek}</b><span>records</span></div></div>
     <button class="btn primary wide" data-act="gotoToday">${nSets ? `Continue workout · ${nSets} sets` : 'Start workout'}</button>
-    ${entries.length ? `<div class="section" style="margin-top:22px"><h2>Today's workout</h2><div class="entries">${entries.map(e => entryHTML(e, I, t, u, 'openext')).join('')}</div></div>` : ''}
     <div class="grid two" style="margin-top:16px">
       <section class="tile"><h2>Last 7 days</h2><div class="week">${strip}</div><p class="muted small">Bars show sets per day.</p></section>
       <section class="tile"><h2>Recent records</h2>${prs.length ? `<div class="list">${prs.map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">Beat a previous best and it shows up here.</p>'}</section>
@@ -746,8 +763,9 @@ function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
     ${entries.length && ds ? `<div class="dayline">${scoresOn() ? `<span class="st"><b>${st.toFixed(1)}</b> strain</span>` : ''}<span><b>${ds.sets}</b> sets</span><span><b>${fmtVol(ds.vol,u)}</b> ${wUnit(u)}</span>${ds.dur ? `<span><b>${Math.round(ds.dur)}</b> min</span>` : ''}</div>` : '<div style="height:12px"></div>'}
     <div class="entries">${list}</div>
     <div style="margin-top:14px"><button class="btn primary wide" data-act="addex">${IC.plus} Add exercise</button></div>
-    <div class="actions"><button class="tbtn" data-act="copy">${IC.copy} Copy a workout</button><button class="tbtn" data-act="routines">${IC.list} Routines</button>${d === today() ? '' : `<button class="tbtn" data-act="gotoToday">Back to today</button>`}</div>
-    ${entries.length ? `<section class="tile" style="margin-top:14px"><h2>How hard was it?</h2>
+    <div class="actions"><button class="tbtn" data-act="copy">${IC.copy} Copy a workout</button><button class="tbtn" data-act="routines">${IC.list} Routines</button>${!scoresOn() && entries.length && !(day.note || S.noteOpen === d) ? `<button class="tbtn" data-act="addnote">Add note</button>` : ''}${d === today() ? '' : `<button class="tbtn" data-act="gotoToday">Back to today</button>`}</div>
+    ${!scoresOn() && entries.length && (day.note || S.noteOpen === d) ? `<label class="field" style="margin-top:12px"><span>Workout note</span><textarea class="txt" id="wnote" data-ch="wnote" maxlength="600" rows="2">${esc(day.note||'')}</textarea></label>` : ''}
+    ${entries.length && scoresOn() ? `<section class="tile" style="margin-top:14px"><h2>How hard was it?</h2>
       <div class="field"><span>Session effort, 1 easy to 10 max${rpe ? ` · ${rpe}` : ''}</span><div class="seg">${[1,2,3,4,5,6,7,8,9,10].map(n => `<button class="${rpe===n?'on':''}" data-act="rpe" data-v="${n}">${n}</button>`).join('')}</div></div>
       <label class="field"><span>Workout note</span><textarea class="txt" id="wnote" data-ch="wnote" maxlength="600">${esc(day.note||'')}</textarea></label></section>` : ''}
   </div>`;
@@ -755,26 +773,49 @@ function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
 
 /* ---------- calendar ---------- */
 function vCal(){
-  const I = ix(S.aid), u = unit(), ym = S.calMonth, first = parseISO(ym+'-01'), t = today();
-  const start = weekStart(ym+'-01'); let cells = '';
-  ['M','T','W','T','F','S','S'].forEach(h => cells += `<div class="h" aria-hidden="true">${h}</div>`);
-  let wcount = 0, sets = 0, vol = 0, strain = 0; const sc = scoresOn();
-  for (let i=0; i<42; i++) {
-    const d = addDays(start, i); const inM = d.slice(0,7) === ym;
-    if (i >= 35 && addDays(start,35).slice(0,7) !== ym) break;
-    const cats = I.dayCats[d], s = I.dayStrain[d] || 0;
-    if (inM && cats) { wcount++; sets += I.dayStats[d].sets; vol += I.dayStats[d].vol; strain += s; }
-    const bg = !inM || !cats ? '' : sc ? `background:rgba(0,147,231,${(0.1 + s/21*0.5).toFixed(2)})` : 'background:rgba(0,147,231,.35)';
-    cells += `<button class="cd ${cats?'has':''} ${inM?'':'out'} ${d===t?'today':''}" data-act="goto" data-v="${d}" style="${bg}" ${inM?'':'tabindex="-1" aria-hidden="true"'} aria-label="${fmtDateLong(d)}${cats ? (sc ? `, strain ${s.toFixed(1)}` : ', workout') : ''}"><span class="d">${parseISO(d).getDate()}</span>${cats ? `<span class="dots">${Object.keys(cats).slice(0,5).map(c => `<i style="--c:${CATS[c].c}"></i>`).join('')}</span>` : ''}</button>`;
-  }
-  const used = [...new Set(Object.entries(I.dayCats).filter(([d]) => d.slice(0,7)===ym).flatMap(([,c]) => Object.keys(c)))];
-  const isNow = ym === t.slice(0,7);
-  return `<div class="wrap">${banners()}
-    <header class="top"><div class="t"><h1>${first.toLocaleDateString(undefined,{month:'long'})}</h1><p class="sub">${first.getFullYear()}</p></div><div class="row">${isNow ? '' : `<button class="chip" data-act="cal" data-v="0">This month</button>`}<button class="icon-btn" data-act="cal" data-v="-1" aria-label="Previous month">${IC.back}</button><button class="icon-btn" data-act="cal" data-v="1" aria-label="Next month">${IC.next}</button></div></header>
-    ${athleteIds().length > 1 ? `<div style="margin:-8px 0 14px">${athSwitch()}</div>` : ''}
-    <div class="grid two"><div class="section" style="margin:0"><div class="cal">${cells}</div>${used.length ? `<div class="legend">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}<p class="muted small">${sc ? 'Darker blue means a harder day. ' : 'Blue days have a workout. '}Dots are the muscle groups trained.</p></div>
-    <section class="tile" style="align-self:start"><h2>${first.toLocaleDateString(undefined,{month:'long'})} totals</h2><div class="figs"><div class="fig"><b>${wcount}</b><span>workouts</span></div>${sc ? `<div class="fig"><b style="color:var(--link)">${wcount ? (strain/wcount).toFixed(1) : '–'}</b><span>avg strain</span></div>` : `<div class="fig"><b style="color:var(--yellow)">${I.prs.filter(p => p.date.slice(0,7) === ym).length}</b><span>records</span></div>`}<div class="fig"><b>${sets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(vol,u)}</b><span>${wUnit(u)} lifted</span></div></div></section></div></div>`;
+  const I = ix(S.aid), t = today(), cur = t.slice(0,7);
+  // Months run from the first logged workout (at most 3 years back, at least 3 months) to 2 months ahead.
+  const firstData = I.dates.length ? I.dates[0].slice(0,7) : cur;
+  const ymAdd = (ym, n) => { const d = parseISO(ym+'-01'); d.setMonth(d.getMonth()+n); return iso(d).slice(0,7); };
+  const floor = ymAdd(cur, -(36 + (S.calBack||0)));
+  let startYm = firstData < ymAdd(cur,-3) ? firstData : ymAdd(cur,-3);
+  const hasEarlier = startYm < floor; if (hasEarlier) startYm = floor;
+  const months = []; for (let ym = startYm; ym <= ymAdd(cur, 2); ym = ymAdd(ym, 1)) months.push(ym);
+  const dows = [0,1,2,3,4,5,6].map(i => new Date(2026,1,1+i).toLocaleDateString(undefined,{weekday:'short'}).toUpperCase());
+  const monthHTML = ym => {
+    const first = parseISO(ym+'-01'), lead = first.getDay(), nDays = new Date(first.getFullYear(), first.getMonth()+1, 0).getDate();
+    let cells = dows.map(d => `<div class="cdow" aria-hidden="true">${d}</div>`).join('') + '<span></span>'.repeat(lead), n = 0;
+    for (let i=1; i<=nDays; i++) {
+      const d = `${ym}-${pad(i)}`, cats = I.dayCats[d];
+      if (cats) n++;
+      const dots = cats ? CAT_ORDER.filter(c => cats[c]).slice(0,5).map(c => `<i style="--c:${CATS[c].c}"></i>`).join('') : '';
+      cells += `<button class="cday ${d===t?'today':''}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}${cats ? ', workout: ' + CAT_ORDER.filter(c => cats[c]).map(c => CATS[c].name).join(', ') : ''}"><span class="n">${i}</span><span class="dots">${dots}</span></button>`;
+    }
+    return `<section class="cmonth" id="m-${ym}" data-ym="${ym}" data-n="${n}"><h2 class="cmh">${first.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><div class="cgrid">${cells}</div></section>`;
+  };
+  const used = [...new Set(Object.values(I.dayCats).flatMap(c => Object.keys(c)))];
+  const curN = (months.includes(S.calMonth) ? S.calMonth : cur);
+  const nCur = I.dates.filter(d => d.slice(0,7) === curN).length;
+  return `<div class="wrap">${banners()}${topbar('Calendar', '')}
+    ${hasEarlier ? `<div style="text-align:center"><button class="tbtn" data-act="calmore">Show earlier months</button></div>` : ''}
+    ${months.map(monthHTML).join('')}
+    ${used.length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}
+    <div class="calbar"><button class="icon-btn" data-act="cal" data-v="-1" aria-label="Previous month">${IC.back}</button><b id="calcount" aria-live="polite">${calCountText(nCur)}</b><button class="icon-btn" data-act="cal" data-v="1" aria-label="Next month">${IC.next}</button></div>
+  </div>`;
 }
+const calCountText = n => n === 0 ? 'No workouts' : n === 1 ? '1 workout' : `${n} workouts`;
+function calSections(){ return [...document.querySelectorAll('.cmonth')]; }
+function scrollToMonth(ym, smooth){ const el = document.getElementById('m-'+ym) || document.getElementById('m-'+today().slice(0,7)); if (el) { if (el.scrollIntoView) el.scrollIntoView({block:'start', behavior: smooth ? 'smooth' : 'auto'}); S.calMonth = el.dataset.ym; updateCalBar(); } }
+function updateCalBar(){
+  if (S.view !== 'calendar') return;
+  const secs = calSections(); if (!secs.length) return;
+  const line = window.innerHeight * 0.35; let curEl = secs[0];
+  for (const sec of secs) { if (sec.getBoundingClientRect().top <= line) curEl = sec; else break; }
+  S.calMonth = curEl.dataset.ym;
+  const b = $('#calcount'); if (b) b.textContent = calCountText(+curEl.dataset.n);
+}
+let calRaf = false;
+window.addEventListener('scroll', () => { if (S.view !== 'calendar' || calRaf) return; calRaf = true; requestAnimationFrame(() => { calRaf = false; updateCalBar(); }); }, {passive:true});
 
 /* ---------- trends ---------- */
 const RANGES = {'1W':7,'1M':30,'3M':91,'6M':182,'1Y':365};
@@ -842,7 +883,7 @@ function vMore(){
   const prof = ids.map(id => { const a = S.athletes[id];
     return `<section class="tile"><label class="field"><span>Name</span><input class="txt" id="an-${esc(id)}" data-ch="aname" data-v="${esc(id)}" value="${esc(a.name)}" maxlength="30"></label>
       <div class="field"><span>Weights and distances</span><div class="chips"><button class="chip ${(a.unit||'kg')==='lb'?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="unit" data-x="lb">lbs and miles</button><button class="chip ${(a.unit||'kg')==='kg'?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="unit" data-x="kg">kg and km</button></div></div>
-      <div class="field"><span>Today screen</span><div class="chips"><button class="chip ${a.scores !== false ? 'on' : ''}" data-act="aset" data-v="${esc(id)}" data-k="scores" data-x="1">Readiness and strain</button><button class="chip ${a.scores === false ? 'on' : ''}" data-act="aset" data-v="${esc(id)}" data-k="scores" data-x="0">Workouts only</button></div></div>
+      <div class="field"><span>Today screen</span><div class="chips"><button class="chip ${a.scores !== true ? 'on' : ''}" data-act="aset" data-v="${esc(id)}" data-k="scores" data-x="0">Workouts only</button><button class="chip ${a.scores === true ? 'on' : ''}" data-act="aset" data-v="${esc(id)}" data-k="scores" data-x="1">Readiness and strain</button></div></div>
       <div class="field"><span>Rest timer after each set</span><div class="chips">${[0,60,90,120,180,240].map(s => `<button class="chip ${(a.rest??90)===s?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="rest" data-x="${s}">${s ? fmtDur(s) : 'Off'}</button>`).join('')}</div></div>
       <div class="field"><span>Workouts per week goal</span><div class="chips">${[2,3,4,5,6,7].map(g => `<button class="chip ${(a.goal||4)===g?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="goal" data-x="${g}">${g}</button>`).join('')}</div></div>
       ${ids.length > 1 ? `<div class="field"><span>Chart color</span><div class="swatches">${COLORS.map(c => `<button class="sw ${a.color===c?'on':''}" style="--c:${c}" data-act="acolor" data-v="${esc(id)}" data-c="${c}" aria-label="Use this color"></button>`).join('')}</div></div>` : ''}
@@ -1038,7 +1079,7 @@ function draftToSet(type, u){
 }
 const STEP = {w:u => u==='lb' ? 5 : 2.5, r:() => 1, d:() => 0.5};
 const ACT = {
-  ath(el){ S.aid = el.dataset.v; pref.set('aid', S.aid); if (S.sheet && S.sheet.kind==='ex') S.draft = defaultDraft(S.sheet.ex); render(); },
+  ath(el){ S.aid = el.dataset.v; pref.set('aid', S.aid); if (S.view === 'calendar') S.calJump = true; if (S.sheet && S.sheet.kind==='ex') S.draft = defaultDraft(S.sheet.ex); render(); },
   onboard(){
     const n1 = $('#ob-1').value.trim(), n2 = $('#ob-2').value.trim(), u = $('#ob-u').value;
     if (!n1) return toast('Add your name to start.', 'err');
@@ -1051,13 +1092,15 @@ const ACT = {
   gotoToday(){ S.date = today(); dropSheet(); if (location.hash !== '#log') location.hash = 'log'; else { render(); window.scrollTo(0,0); } },
   goto(el){ S.date = el.dataset.v; dropSheet(); if (location.hash !== '#log') location.hash = 'log'; else render(); window.scrollTo(0,0); },
   day(el){ S.date = addDays(S.date, +el.dataset.v); render(); },
-  cal(el){ const v = +el.dataset.v; if (!v) S.calMonth = today().slice(0,7); else { const d = parseISO(S.calMonth+'-01'); d.setMonth(d.getMonth()+v); S.calMonth = iso(d).slice(0,7); } render(); },
+  cal(el){ const v = +el.dataset.v, secs = calSections(), i = secs.findIndex(x => x.dataset.ym === S.calMonth); const target = !v ? today().slice(0,7) : secs[clamp(i + v, 0, secs.length-1)] && secs[clamp(i + v, 0, secs.length-1)].dataset.ym; if (target) scrollToMonth(target, true); },
+  calmore(){ S.calBack = (S.calBack||0) + 24; const keep = S.calMonth; render(); scrollToMonth(keep, false); },
   trange(el){ S.trendRange = el.dataset.v; render(); },
   close(){ blurActive(); if (history.state && history.state.sheet) { try { history.back(); return; } catch {} } dropSheet(); render(); },
   addex(){ S.addQ = ''; S.addCat = ix(S.aid).dates.length ? 'recent' : 'all'; openSheet({kind:'add'}); render(); },
   addcat(el){ S.addCat = el.dataset.v; S.addQ = ''; render(); },
   pickex(el){ openEx(el.dataset.v); },
   openex(el){ openEx(el.dataset.v); },
+  addnote(){ S.noteOpen = S.date; render(); const t = $('#wnote'); if (t) t.focus(); },
   openext(el){ S.date = today(); openEx(el.dataset.v); },
   openexg(el){ S.date = today(); openEx(el.dataset.v, 'graph'); },
   newex(){ openSheet({kind:'newex'}); render(); },
@@ -1162,7 +1205,7 @@ function cleanDoc(p, v){
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   if (/^athletes\/a[a-z0-9]{1,30}$/.test(p)) {
     const name = str(v.name, 30).trim(); if (!name) return null;
-    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, scores:v.scores !== false};
+    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, scores:v.scores === true};
   }
   const mm = p.match(/^athletes\/a[a-z0-9]{1,30}\/months\/(\d{4}-\d{2})$/);
   if (mm) {
@@ -1375,14 +1418,14 @@ document.addEventListener('change', ev => {
   else if (k === 'bkreplace' && el.files && el.files[0]) loadBackup(el.files[0], 'replace');
   if (el.type === 'file') el.value = '';
 });
-function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; if (S.sheet) dropSheet(); render(); window.scrollTo(0,0); }
+function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; if (S.sheet) dropSheet(); if (S.view === 'calendar') S.calJump = true; render(); if (S.view !== 'calendar') window.scrollTo(0,0); }
 window.addEventListener('hashchange', route);
 let rzT; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(drawCharts, 150); });
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.view === 'more') render(); });
 
 /* ================= boot ================= */
 async function init(){
-  const h = (location.hash || '').slice(1); if (VIEWS[h]) S.view = h;
+  const h = (location.hash || '').slice(1); if (VIEWS[h]) S.view = h; if (S.view === 'calendar') S.calJump = true;
   await DB.init();
   if (S.storeBlocked) { S.ready = true; render(); return; }
   try { Object.assign(DOCS, await DB.loadAll()); } catch { S.storeBlocked = !!DB.idb; S.storeOk = false; if (S.storeBlocked) { S.ready = true; render(); return; } }
