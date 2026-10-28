@@ -212,8 +212,9 @@ textarea.txt{min-height:80px;resize:vertical}
 .cday.today .n{background:var(--blue);color:#fff;font-weight:600}
 .cday .dots{display:flex;gap:3px;height:7px}
 .cday .dots i{width:7px;height:7px;border-radius:50%;background:var(--c)}
-.calbar{position:sticky;z-index:5;bottom:var(--navh,0px);display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;margin:14px calc(-1 * max(16px, env(safe-area-inset-left,0px))) 0;padding:6px max(16px, env(safe-area-inset-left,0px));background:var(--tile);border-top:1px solid var(--hair)}
-@media (min-width:900px){.calbar{border-radius:14px;margin-inline:0}}
+.calwrap{padding-bottom:calc(var(--navh,64px) + 96px)!important}
+.calbar{position:fixed;z-index:25;left:0;right:0;bottom:calc(var(--navh,0px) - 1px);display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;padding:6px max(16px, env(safe-area-inset-right,0px)) 6px max(16px, env(safe-area-inset-left,0px));background:var(--tile);border-top:1px solid var(--hair)}
+@media (min-width:900px){.calbar{left:226px;right:16px;bottom:16px;border-radius:14px;border-top:0}.calwrap{padding-bottom:110px!important}}
 .calbar b{text-align:center;font-family:var(--f-num);font-weight:600;font-size:19px;text-transform:uppercase;letter-spacing:.04em}
 .calbar .icon-btn{background:transparent;color:var(--link)}
 .calbar .icon-btn svg{width:26px;height:26px}
@@ -256,6 +257,31 @@ textarea.txt{min-height:80px;resize:vertical}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;margin:0 6px 6px 0;border-radius:999px;background:var(--tile2);font-family:var(--f-num);font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
 .pill .pr svg{width:14px;height:14px}
 .setlist{display:flex;flex-direction:column}
+.trow{display:grid;grid-template-columns:64px minmax(0,1fr) minmax(0,1fr);align-items:baseline;width:100%;text-align:left;padding:13px 4px;border-bottom:1px solid var(--hair)}
+.trow.sel{background:var(--tile);border-radius:12px;border-color:transparent}
+.trow .tn{display:flex;align-items:center;gap:6px;padding-left:6px;font-family:var(--f-num);font-weight:600;font-size:22px;align-self:center}
+.trow .tn .pr svg{width:17px;height:17px}
+.sh-top{position:relative}
+.menu-scrim{position:fixed;inset:0;z-index:51}
+.menu{position:absolute;z-index:52;top:calc(100% - 4px);right:max(12px,env(safe-area-inset-right,0px));min-width:220px;background:var(--tile2);border-radius:14px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.7);display:flex;flex-direction:column}
+.menu button{text-align:left;padding:14px 14px;border-radius:10px;font-size:17px}
+.menu button:active{background:var(--hair)}
+#dlg{position:fixed;inset:0;z-index:57;display:grid;place-items:center;padding:16px}
+#dlg .dscrim{position:absolute;inset:0;background:rgba(0,0,0,.7)}
+.dbox{position:relative;width:100%;max-width:420px;max-height:calc(100% - 20px);overflow-y:auto;background:var(--tile);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.7)}
+.dbox > *{flex-shrink:0}
+.dbox h2{font-family:var(--f-num);font-size:24px;font-weight:700}
+.dbox .stepper{background:var(--tile2)}
+.dbox .chip{background:var(--tile2)}
+.dbox .chip.on{background:var(--fg)}
+.dout{text-align:center;padding:12px;border-radius:14px;background:var(--bg)}
+.dout .big{font-size:46px}
+.dbtns{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px}
+.rmt{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.rmt td{padding:6px 4px;border-bottom:1px solid var(--hair);font-family:var(--f-num);font-size:17px}
+.rmt td:nth-child(2){text-align:right}
+.rmt td:nth-child(3){text-align:right;color:var(--mute);font-size:15px}
+.plates{display:block;margin:0 auto;max-width:100%}
 .setrow{display:grid;grid-template-columns:28px minmax(0,1fr) auto auto;align-items:center;gap:10px;width:100%;text-align:left;padding:13px 4px;border-bottom:1px solid var(--hair)}
 .setrow.sel{background:var(--tile);border-radius:12px;border-color:transparent;padding-inline:12px}
 .setrow .sn{font-family:var(--f-num);font-weight:700;color:var(--dim);font-size:17px}
@@ -330,6 +356,7 @@ textarea.txt{min-height:80px;resize:vertical}
 </nav>
 <main id="main"><div class="wrap"><p class="muted">Loading…</p></div></main>
 <div id="sheet" hidden><div class="scrim" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="dlg" hidden></div>
 <div id="timer" hidden role="timer">
   <svg class="tr" viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="17" fill="none" stroke="#232a2f" stroke-width="4"/><circle id="tring" cx="21" cy="21" r="17" fill="none" stroke="#4cbaff" stroke-width="4" stroke-linecap="round" transform="rotate(-90 21 21)" stroke-dasharray="0 107"/></svg>
   <div class="tt"><span id="tlbl">Rest</span><b id="tleft">0:00</b></div>
@@ -377,6 +404,7 @@ const IC = {
   trophy:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v3H8v-3h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3zm0 4H6v1a2 2 0 0 0 1 1.7V7zm10 0v2.7A2 2 0 0 0 18 8V7h-1z"/></svg>',
   timer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>',
   copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
+  dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
   list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>'
 };
 
@@ -645,9 +673,20 @@ function render(){
   $('#main').innerHTML = html;
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === S.view));
   renderSheet(); drawCharts(); tick();
-  const nav = $('#nav'); document.documentElement.style.setProperty('--navh', (window.matchMedia && matchMedia('(min-width:900px)').matches ? 0 : nav.offsetHeight) + 'px');
+  setNavH(); renderDlg();
   if (S.view === 'calendar' && S.calJump && S.ready && athleteIds().length) { S.calJump = false; scrollToMonth(S.calMonth, false); }
 }
+// The calendar's count bar sits directly on top of the tab bar. Its offset is measured from the tab bar's real
+// position (fonts, safe areas and text size all change its height), and re-measured whenever that changes.
+function setNavH(){
+  const nav = $('#nav'); if (!nav) return;
+  const wide = window.matchMedia && matchMedia('(min-width:900px)').matches;
+  const h = wide ? 0 : Math.max(0, Math.round((document.documentElement.clientHeight || window.innerHeight) - nav.getBoundingClientRect().top));
+  document.documentElement.style.setProperty('--navh', h + 'px');
+}
+try { new ResizeObserver(setNavH).observe($('#nav')); } catch {}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(setNavH);
+window.addEventListener('resize', setNavH);
 let sheetKey = '';
 function renderSheet(){
   const w = $('#sheet'), p = $('#sheet .sheet');
@@ -799,7 +838,7 @@ function vCal(){
   const used = [...new Set(Object.values(I.dayCats).flatMap(c => Object.keys(c)))];
   const curN = (months.includes(S.calMonth) ? S.calMonth : cur);
   const nCur = I.dates.filter(d => d.slice(0,7) === curN).length;
-  return `<div class="wrap">${banners()}${topbar('Calendar', '')}
+  return `<div class="wrap calwrap">${banners()}${topbar('Calendar', '')}
     ${hasEarlier ? `<div style="text-align:center"><button class="tbtn" data-act="calmore">Show earlier months</button></div>` : ''}
     ${months.map(monthHTML).join('')}
     ${used.length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}
@@ -930,14 +969,15 @@ function notifyHTML(){
 const VIEWS = {today:vToday, log:vLog, calendar:vCal, trends:vTrends, more:vMore};
 
 /* ================= sheets ================= */
-function sheetTop(title, sub){ return `<div class="sh-top"><button class="icon-btn" data-act="close" aria-label="Close">${IC.back}</button><div class="sh-title"><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div></div>`; }
+function sheetTop(title, sub, right){ return `<div class="sh-top"><button class="icon-btn" data-act="close" aria-label="Close">${IC.back}</button><div class="sh-title"><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div>${right || ''}</div>`; }
 function shEx(){
   const ex = S.sheet.ex, m = exMeta(ex), u = unit(), tab = S.sheet.tab;
   const names = {track:'Track', history:'History', graph:'Graph', records:'Records'};
   const tabs = Object.keys(names).map(t => `<button class="tab ${tab===t?'on':''}" data-act="extab" data-v="${t}" role="tab" aria-selected="${tab===t}">${names[t]}</button>`).join('');
   const body = tab==='track' ? trackHTML(ex,m,u) : tab==='history' ? historyHTML(ex,m,u) : tab==='graph' ? graphHTML(ex,m,u) : recordsHTML(ex,m,u);
   const sub = `${CATS[m.cat].name} · ${relDay(S.date)}${athleteIds().length > 1 ? ' · ' + A().name : ''}`;
-  return sheetTop(m.name, sub) + `<div class="tabs" role="tablist">${tabs}</div><div class="sh-body">${body}</div>`;
+  const menu = `<button class="icon-btn" data-act="exmenu" aria-label="Calculators" aria-expanded="${!!S.menu}">${IC.dots}</button>${S.menu ? `<div class="menu-scrim" data-act="menuclose"></div><div class="menu" role="menu"><button role="menuitem" data-act="calc" data-v="1rm">1RM Calculator</button><button role="menuitem" data-act="calc" data-v="set">Set Calculator</button><button role="menuitem" data-act="calc" data-v="plate">Plate Calculator</button></div>` : ''}`;
+  return sheetTop(m.name, sub, menu) + `<div class="tabs" role="tablist">${tabs}</div><div class="sh-body">${body}</div>`;
 }
 function stepper(f, label, mode){ return `<div class="field"><label for="in-${f}">${label}</label><div class="stepper"><button data-act="step" data-f="${f}" data-v="-1" aria-label="Decrease">−</button><input id="in-${f}" data-in="draft" data-f="${f}" inputmode="${mode}" value="${esc(S.draft[f]||'')}" autocomplete="off" enterkeyhint="done"><button data-act="step" data-f="${f}" data-v="1" aria-label="Increase">+</button></div></div>`; }
 function trackHTML(ex, m, u){
@@ -947,27 +987,31 @@ function trackHTML(ex, m, u){
     : m.type==='r' ? stepper('r','Reps','numeric')
     : m.type==='t' ? stepper('t','Time (m:ss)','text')
     : stepper('d', `Distance (${distU(u)})`, 'decimal') + stepper('t','Time (h:mm:ss)','text');
-  const editing = S.editIdx != null, last = lastSession(S.aid, ex, S.date);
+  const editing = S.editIdx != null;
   return `<div class="fields">${fields}</div>
-    <label class="field"><span>Comment</span><input class="txt" id="in-note" data-in="draft" data-f="note" value="${esc(S.draft.note||'')}" placeholder="Optional" maxlength="140"></label>
     <div class="row2">${editing ? `<button class="btn primary" data-act="saveset">Update set ${S.editIdx+1}</button><button class="btn danger" data-act="delset">Delete set</button>` : `<button class="btn primary" data-act="saveset">Save set</button><button class="btn" data-act="clearset">Clear</button>`}</div>
     ${editing ? `<button class="link" data-act="canceledit">Stop editing</button>` : ''}
     <div class="restcard" id="restcard" data-st="${restState()}" aria-live="polite">${restInner()}</div>
-    ${last ? `<div class="last"><p style="margin-bottom:8px">Last time, ${fmtDateShort(last.date)}</p><div>${last.sets.map((s,i) => `<span class="pill">${esc(fmtSetShort(s,m.type,u))}${last.prIdx===i?`<span class="pr">${IC.trophy}</span>`:''}</span>`).join('')}</div></div>` : ''}
-    ${sets.length ? `<div class="setlist">${sets.map((s,i) => `<button class="setrow ${S.editIdx===i?'sel':''}" data-act="editset" data-v="${i}" aria-label="Edit set ${i+1}"><span class="sn">${i+1}</span><span class="sv">${esc(fmtSet(s,m.type,u))}</span>${m.type==='wr' && s.w > 0 && s.r > 1 ? `<span class="se">1RM ${fmtE(e1rm(s.w,s.r),u)}</span>` : '<span></span>'}${i===prIdx ? `<span class="pr" aria-label="Personal record">${IC.trophy}</span>` : '<span></span>'}${s.note ? `<span class="snote">${esc(s.note)}</span>` : ''}</button>`).join('')}</div>`
+    ${sets.length ? `<div class="setlist">${sets.map((s,i) => { const [a,b] = setCells(s, m.type, u); return `<button class="trow ${S.editIdx===i?'sel':''}" data-act="editset" data-v="${i}" aria-label="Edit set ${i+1}"><span class="tn">${i+1}${i===prIdx ? `<span class="pr" aria-label="Personal record">${IC.trophy}</span>` : ''}</span><span class="hv">${a}</span><span class="hv">${b}</span>${s.note ? `<span class="hn">${esc(s.note)}</span>` : ''}</button>`; }).join('')}</div>`
       : `<p class="empty">Enter ${m.type==='wr' ? 'the weight and reps' : m.type==='r' ? 'your reps' : m.type==='t' ? 'a time' : 'a distance, a time, or both'}, then tap Save set.</p>`}
+    <label class="field"><span>Comment for the next set</span><input class="txt" id="in-note" data-in="draft" data-f="note" value="${esc(S.draft.note||'')}" placeholder="Optional" maxlength="140"></label>
     ${en ? `<div class="actions"><button class="tbtn danger" data-act="removeex">${S.confirm==='removeex' ? 'Tap again to remove' : 'Remove from this day'}</button></div>` : ''}`;
 }
 // One weight in history: "30.0", keeping a second decimal only when it matters (e.g. 2.25 kg).
 const fmtW1 = (kg,u) => { const v = wRaw(kg,u); return Number.isInteger(Math.round(v*100)/10) ? v.toFixed(1) : v.toFixed(2); };
-function histRow(s, type, u, pr){
-  const trophy = pr ? `<span class="pr" aria-label="Personal record">${IC.trophy}</span>` : '';
+// The two value columns of a set row, FitNotes style: "35.0 lbs" | "10 reps".
+function setCells(s, type, u){
   const unitCell = (v, unit) => `${v}<i>${unit}</i>`;
   let a = '', b = '';
   if (type === 'wr') { a = s.w > 0 ? unitCell(fmtW1(s.w,u), wUnit(u)) : unitCell('BW', ''); b = unitCell(s.r, s.r === 1 ? 'rep' : 'reps'); }
   else if (type === 'r') b = unitCell(s.r, s.r === 1 ? 'rep' : 'reps');
   else if (type === 't') b = fmtDur(s.t);
   else { a = s.d ? unitCell(fmtNum(dRaw(s.d,u),2), distU(u)) : ''; b = s.t ? fmtDur(s.t) : ''; }
+  return [a, b];
+}
+function histRow(s, type, u, pr){
+  const trophy = pr ? `<span class="pr" aria-label="Personal record">${IC.trophy}</span>` : '';
+  const [a, b] = setCells(s, type, u);
   return `<div class="hrow"><span class="ht">${trophy}</span><span class="hv">${a}</span><span class="hv">${b}</span>${s.note ? `<span class="hn">${esc(s.note)}</span>` : ''}</div>`;
 }
 function historyHTML(ex, m, u){
@@ -1056,13 +1100,85 @@ function shRoutines(){
     ${rs.length ? `<div class="list">${rs.map(([id,r]) => `<button class="lrow" data-act="applyrt" data-v="${esc(id)}"><div class="grow"><div style="font-weight:600">${esc(r.name)}</div><div class="meta">${(r.exs||[]).map(x => esc(exMeta(x).name)).join(', ')}</div></div><span class="link">Load</span></button>`).join('')}</div>` : '<p class="empty">No routines yet.</p>'}
     ${day && day.entries.length ? `<section class="tile"><label class="field"><span>Save this day's ${day.entries.length} exercises as a routine</span><div class="row"><input class="txt" id="rt-name" maxlength="40" placeholder="Name, like Push day"><button class="btn" data-act="savert">Save</button></div></label></section>` : '<p class="muted">Log a workout first, then save its exercises here as a routine.</p>'}</div>`;
 }
+/* ---------- calculators (opened from the exercise menu) ---------- */
+const PLATE_SETS = {lb:[45,35,25,10,5,2.5], kg:[25,20,15,10,5,2.5,1.25]};
+const PLATE_COLORS = {lb:{45:'#0093e7',35:'#ffde00',25:'#16c60c',10:'#e8edef',5:'#ff3b4e',2.5:'#9aa7b0'}, kg:{25:'#ff3b4e',20:'#0093e7',15:'#ffde00',10:'#16c60c',5:'#e8edef',2.5:'#ff3b4e',1.25:'#9aa7b0'}};
+const BAR_OPTS = {lb:[45,35,15,0], kg:[20,15,10,0]};
+const ROUND_OPTS = {lb:[0,1,2.5,5], kg:[0,0.5,1,2.5]};
+const plateCfg = u => ({bar: pref.get('bar.'+u, u==='lb' ? 45 : 20), plates: pref.get('plates.'+u, PLATE_SETS[u])});
+function bestE1(ex){ const h = ix(S.aid).byEx[ex] || []; let b = 0; h.forEach(x => x.sets.forEach(st => { const e = e1rm(st.w, st.r); if (e > b) b = e; })); return b; }
+function openDlg(kind){
+  const u = unit(), ex = S.sheet && S.sheet.ex, w = num(S.draft.w) || 0, r = parseInt(S.draft.r,10) || 5;
+  const best = ex ? wRaw(bestE1(ex), u) : 0;
+  S.menu = false;
+  S.dlg = {kind, u, w:String(w || ''), r:String(r), max:String(best || w || ''), pct:'85', round: pref.get('round.'+u, u==='lb' ? 5 : 2.5), pw:String(w || (u==='lb' ? 135 : 60)), settings:false};
+  try { history.pushState({dlg:true}, ''); } catch {}
+  render();
+}
+function closeDlg(){ if (history.state && history.state.dlg) { try { history.back(); return; } catch {} } S.dlg = null; render(); }
+const f1 = v => (Math.round(v*10)/10).toFixed(1);
+const fP = v => Number.isInteger(v*10) ? v.toFixed(1) : String(v); // plate sizes like 1.25 keep their second decimal
+function dstepper(f, label, mode){ return `<div class="field"><label for="dl-${f}">${label}</label><div class="stepper"><button data-act="dstep" data-f="${f}" data-v="-1" aria-label="Decrease">−</button><input id="dl-${f}" data-in="dlg" data-f="${f}" inputmode="${mode}" value="${esc(S.dlg[f])}" autocomplete="off"><button data-act="dstep" data-f="${f}" data-v="1" aria-label="Increase">+</button></div></div>`; }
+function dlgOut(){
+  const D = S.dlg, u = D.u, U = wUnit(u);
+  if (D.kind === '1rm') {
+    const w = num(D.w) || 0, r = parseInt(D.r,10) || 0, one = e1rm(w, r);
+    if (!(w > 0 && r > 0)) return '<p class="muted" style="text-align:center">Enter a weight and the reps you did.</p>';
+    return `<div class="dout"><div class="muted">Estimated 1RM</div><div class="big">${f1(one)}<small> ${U}</small></div></div>
+      <table class="rmt"><tbody>${[1,2,3,4,5,6,8,10,12].map(n => { const wt = n === 1 ? one : one/(1+n/30); return `<tr><td>${n} ${n===1?'rep':'reps'}</td><td>${f1(wt)} ${U}</td><td>${Math.round(wt/one*100)}%</td></tr>`; }).join('')}</tbody></table>`;
+  }
+  if (D.kind === 'set') {
+    const max = num(D.max) || 0, pct = num(D.pct) || 0; let v = max*pct/100;
+    if (D.round > 0) v = Math.round(v/D.round)*D.round;
+    return `<div class="dout"><div class="big">${max > 0 && pct > 0 ? f1(v) : '–'}<small> ${U}</small></div></div>`;
+  }
+  const cfg = plateCfg(u), total = num(D.pw) || 0, side = (total - cfg.bar)/2;
+  if (!(total > 0)) return '<p class="muted" style="text-align:center">Enter the total weight.</p>';
+  if (side < 0) return `<div class="dout"><div class="muted">That's less than the ${f1(cfg.bar)} ${U} bar.</div></div>`;
+  const plates = []; let left = side;
+  for (const pl of cfg.plates.slice().sort((a,b) => b-a)) while (left >= pl - 1e-9) { plates.push(pl); left -= pl; }
+  left = Math.round(left*1000)/1000;
+  // one side of the bar: sleeve, collar, then plates from heaviest (inside) out
+  const maxP = Math.max(...PLATE_SETS[u]);
+  let x = 46, rects = '';
+  plates.forEach(pl => { const h = 36 + 104*(pl/maxP), wdt = pl >= maxP*0.5 ? 16 : pl >= maxP*0.2 ? 12 : 9; rects += `<rect x="${x}" y="${(150-h)/2}" width="${wdt}" height="${h}" rx="3" fill="${PLATE_COLORS[u][pl] || '#9aa7b0'}"/>`; x += wdt + 3; });
+  const svgW = x + 24;
+  const svg = `<svg class="plates" width="${svgW}" height="150" viewBox="0 0 ${svgW} 150" role="img" aria-label="Plates on one side"><rect x="0" y="69" width="${svgW}" height="12" rx="3" fill="#5c676e"/><rect x="34" y="52" width="10" height="46" rx="2" fill="#7d8a93"/>${rects}</svg>`;
+  return `<div class="dout"><div>${f1(cfg.bar)} ${U} bar + <b>${f1(side - left)}</b> ${U} each side</div></div>
+    ${plates.length ? svg : ''}
+    <p style="text-align:center;font-family:var(--f-num);font-size:22px;font-weight:600">${plates.length ? plates.map(pl => `${fP(pl)}<span class="muted" style="font-size:15px"> ${U}</span>`).join(', ') : 'Just the bar'}</p>
+    ${left > 0 ? `<p class="muted small" style="text-align:center">${f1(left*2)} ${U} can't be made with your plates. Closest load is ${f1(total - left*2)} ${U}.</p>` : ''}`;
+}
+function dlgHTML(){
+  const D = S.dlg, u = D.u, U = wUnit(u);
+  if (D.kind === '1rm') return `<h2 id="dlg-t">1RM Calculator</h2>${dstepper('w', `Weight (${U})`, 'decimal')}${dstepper('r', 'Reps', 'numeric')}<div id="dl-out">${dlgOut()}</div><div class="dbtns"><button class="btn" data-act="dlgclose">Close</button></div>`;
+  if (D.kind === 'set') {
+    const best = S.sheet && S.sheet.ex ? bestE1(S.sheet.ex) : 0;
+    return `<h2 id="dlg-t">Set Calculator</h2>${dstepper('max', `Max weight (${U})`, 'decimal')}${best ? `<button class="link" data-act="dlgbest" style="text-align:center">Use my best est. 1RM, ${f1(wRaw(best,u))} ${U}</button>` : ''}
+      ${dstepper('pct', 'Percentage (%)', 'decimal')}<div class="chips" style="justify-content:center">${[50,60,65,70,75,80,85,90,95].map(p => `<button class="chip ${num(D.pct)===p?'on':''}" data-act="dpct" data-v="${p}">${p}</button>`).join('')}</div>
+      <div id="dl-out">${dlgOut()}</div>
+      <div class="field"><span>Round to closest</span><div class="chips">${ROUND_OPTS[u].map(r => `<button class="chip ${D.round===r?'on':''}" data-act="dround" data-v="${r}">${r ? fP(r) + ' ' + U : 'Off'}</button>`).join('')}</div></div>
+      <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="dlguse">Use weight</button></div>`;
+  }
+  const cfg = plateCfg(u);
+  return `<h2 id="dlg-t">Plate Calculator</h2>${dstepper('pw', `Total weight (${U})`, 'decimal')}<div id="dl-out">${dlgOut()}</div>
+    ${D.settings ? `<div class="field"><span>Bar weight</span><div class="chips">${BAR_OPTS[u].map(b => `<button class="chip ${cfg.bar===b?'on':''}" data-act="dbar" data-v="${b}">${b ? f1(b) + ' ' + U : 'No bar'}</button>`).join('')}</div></div>
+      <div class="field"><span>Plates you have</span><div class="chips">${PLATE_SETS[u].map(pl => `<button class="chip ${cfg.plates.includes(pl)?'on':''}" data-act="dplate" data-v="${pl}" aria-pressed="${cfg.plates.includes(pl)}">${fP(pl)}</button>`).join('')}</div></div>` : ''}
+    <div class="dbtns"><button class="btn" data-act="dsettings">${D.settings ? 'Hide settings' : 'Settings'}</button><button class="btn" data-act="dlgclose">Close</button></div>`;
+}
+function renderDlg(){
+  const el = $('#dlg');
+  if (!S.dlg || !S.sheet) { S.dlg = null; el.hidden = true; el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="dscrim" data-act="dlgclose"></div><div class="dbox" role="dialog" aria-modal="true" aria-labelledby="dlg-t">${dlgHTML()}</div>`;
+  el.hidden = false;
+}
 const SHEETS = {ex:shEx, add:shAdd, newex:shNewEx, copy:shCopy, routines:shRoutines};
 
 /* ================= actions ================= */
 // Opening a sheet adds a history entry so the Android back button closes the sheet instead of leaving the app.
 function openSheet(obj){ if (!S.sheet) { try { history.pushState({sheet:true}, ''); } catch {} } S.sheet = obj; }
-function dropSheet(){ S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); try { if (history.state && history.state.sheet) history.replaceState(null, ''); } catch {} }
-window.addEventListener('popstate', () => { if (S.sheet) { S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); render(); } });
+function dropSheet(){ S.menu = false; S.dlg = null; S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); try { if (history.state && history.state.sheet) history.replaceState(null, ''); } catch {} }
+window.addEventListener('popstate', () => { if (S.dlg) { S.dlg = null; render(); return; } if (S.sheet) { S.menu = false; S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); render(); } });
 function openEx(ex, tab){ openSheet({kind:'ex', ex, tab:tab||'track'}); S.editIdx = null; S.confirm = null; S.gMetric = null; S.draft = defaultDraft(ex); render(); keepAwake(); }
 function setToDraft(s, u){ if (!s) return {w:'', r:'', d:'', t:'', note:''}; return {w:s.w != null ? String(wRaw(s.w,u)) : '', r:s.r != null ? String(s.r) : '', d:s.d ? String(dRaw(s.d,u)) : '', t:s.t ? fmtDur(s.t) : '', note:''}; }
 function defaultDraft(ex){
@@ -1103,6 +1219,23 @@ const ACT = {
   addcat(el){ S.addCat = el.dataset.v; S.addQ = ''; render(); },
   pickex(el){ openEx(el.dataset.v); },
   openex(el){ openEx(el.dataset.v); },
+  exmenu(){ S.menu = !S.menu; render(); },
+  menuclose(){ S.menu = false; render(); },
+  calc(el){ openDlg(el.dataset.v); },
+  dlgclose(){ closeDlg(); },
+  dstep(el){
+    const f = el.dataset.f, dir = +el.dataset.v, inp = $('#dl-'+f), u = S.dlg.u;
+    const inc = f === 'r' ? 1 : f === 'pct' ? 2.5 : (u === 'lb' ? 5 : 2.5);
+    let v = Math.max(0, Math.round(((num(inp.value) || 0) + dir*inc)*100)/100); if (f === 'pct') v = Math.min(v, 150);
+    inp.value = String(v); S.dlg[f] = inp.value; $('#dl-out').innerHTML = dlgOut();
+  },
+  dpct(el){ S.dlg.pct = el.dataset.v; renderDlg(); },
+  dround(el){ S.dlg.round = +el.dataset.v; pref.set('round.'+S.dlg.u, S.dlg.round); renderDlg(); },
+  dlgbest(){ S.dlg.max = String(f1(wRaw(bestE1(S.sheet.ex), S.dlg.u))); renderDlg(); },
+  dlguse(){ const D = S.dlg, max = num(D.max) || 0, pct = num(D.pct) || 0; let v = max*pct/100; if (D.round > 0) v = Math.round(v/D.round)*D.round; if (!(v > 0)) return toast('Enter a max weight and a percentage.', 'err'); S.draft.w = String(Math.round(v*100)/100); S.editIdx = null; closeDlg(); toast(`Weight set to ${f1(v)} ${wUnit(D.u)}`); },
+  dsettings(){ S.dlg.settings = !S.dlg.settings; renderDlg(); },
+  dbar(el){ pref.set('bar.'+S.dlg.u, +el.dataset.v); renderDlg(); },
+  dplate(el){ const u = S.dlg.u, pl = +el.dataset.v, cur = plateCfg(u).plates; pref.set('plates.'+u, cur.includes(pl) ? cur.filter(x => x !== pl) : cur.concat(pl)); renderDlg(); },
   addnote(){ S.noteOpen = S.date; render(); const t = $('#wnote'); if (t) t.focus(); },
   openext(el){ S.date = today(); openEx(el.dataset.v); },
   openexg(el){ S.date = today(); openEx(el.dataset.v, 'graph'); },
@@ -1115,7 +1248,7 @@ const ACT = {
     patchDoc('library/custom', {items:{[id]:{name, cat, type}}}); openEx(id);
   },
   delex(el){ patchDoc('library/custom', {items:{[el.dataset.v]:null}}); toast('Exercise deleted'); },
-  extab(el){ S.sheet.tab = el.dataset.v; S.editIdx = null; render(); },
+  extab(el){ S.menu = false; S.sheet.tab = el.dataset.v; S.editIdx = null; render(); },
   step(el){
     const f = el.dataset.f, dir = +el.dataset.v, inp = $('#in-'+f), u = unit(), m = exMeta(S.sheet.ex);
     let v;
@@ -1410,6 +1543,8 @@ function exportCSV(){
 
 /* ================= events ================= */
 document.addEventListener('click', ev => {
+  const navA = ev.target.closest('#nav a');
+  if (navA && navA.dataset.nav === S.view && !S.sheet) { ev.preventDefault(); if (S.view === 'calendar') scrollToMonth(today().slice(0,7), true); else window.scrollTo({top:0, behavior:'smooth'}); return; }
   if (ev.target.id === 'datepick') { try { ev.target.showPicker && ev.target.showPicker(); } catch {} }
   const el = ev.target.closest('[data-act]'); if (!el) return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
@@ -1418,12 +1553,15 @@ document.addEventListener('click', ev => {
   fn(el, ev);
 });
 document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && S.dlg) { closeDlg(); return; }
+  if (ev.key === 'Escape' && S.menu) { S.menu = false; render(); return; }
   if (ev.key === 'Escape' && S.sheet) { ACT.close(); return; }
   if (ev.key === 'Enter' && S.sheet && S.sheet.kind === 'ex' && ev.target.closest && ev.target.closest('.fields, #in-note')) { ev.preventDefault(); ev.target.blur(); ACT.saveset(); }
 });
 document.addEventListener('input', ev => {
   const el = ev.target;
   if (el.dataset.in === 'draft') S.draft[el.dataset.f] = el.value;
+  else if (el.dataset.in === 'dlg' && S.dlg) { S.dlg[el.dataset.f] = el.value; const o = $('#dl-out'); if (o) o.innerHTML = dlgOut(); }
   else if (el.dataset.in === 'addq') { S.addQ = el.value; const l = $('#exlist'); if (l) l.innerHTML = exListHTML(); }
 });
 document.addEventListener('change', ev => {
