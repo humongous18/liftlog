@@ -242,6 +242,14 @@ textarea.txt{min-height:80px;resize:vertical}
 .setrow .sv{font-family:var(--f-num);font-weight:700;font-size:22px;font-variant-numeric:tabular-nums}
 .setrow .se{font-size:13px;color:var(--mute)}
 .setrow .snote{grid-column:2/-1;font-size:14px;color:var(--mute)}
+.hday{display:flex;flex-direction:column}
+.hdh{text-align:left;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.02em;color:var(--fg);padding:2px 0 7px;border-bottom:2px solid var(--link);margin-bottom:4px}
+.hrow{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(0,1fr);align-items:baseline;padding:6px 0}
+.hrow .ht{align-self:center;display:flex;padding-left:8px}
+.hrow .ht svg{width:20px;height:20px}
+.hv{text-align:right;font-family:var(--f-num);font-weight:600;font-size:25px;line-height:1.1;font-variant-numeric:tabular-nums;padding-right:6px}
+.hv i{font-style:normal;font-family:var(--f-body);font-weight:400;font-size:15px;color:var(--mute);margin-left:5px}
+.hn{grid-column:2/-1;text-align:right;font-size:13px;color:var(--mute);padding-right:6px}
 .hist{display:flex;flex-direction:column;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--hair)}
 .hist .hd{font-weight:600;color:var(--link);text-align:left}
 .hist .meta{font-size:14px;color:var(--mute)}
@@ -414,6 +422,8 @@ function derive(){
 }
 const athleteIds = () => Object.keys(S.athletes).sort((a,b) => (S.athletes[a].created||0) - (S.athletes[b].created||0));
 const A = () => S.athletes[S.aid];
+// Per-profile switch: false hides readiness, strain and the morning check-in everywhere.
+const scoresOn = (aid = S.aid) => !(S.athletes[aid] && S.athletes[aid].scores === false);
 const unitOf = aid => (S.athletes[aid]||{}).unit || 'kg';
 const unit = () => unitOf(S.aid);
 
@@ -465,7 +475,8 @@ function groupSets(sets, type, u, prIdx){
   if (type !== 'wr') return sets.map((s,i) => `<span class="sg">${esc(fmtSetShort(s,type,u))}${i===prIdx ? trophy : ''}</span>`).join('');
   const groups = [];
   sets.forEach((s,i) => { const g = groups[groups.length-1]; const w = wRaw(s.w||0,u); if (g && g.w === w) { g.reps.push(s.r); if (i===prIdx) g.pr = true; } else groups.push({w, reps:[s.r], pr:i===prIdx}); });
-  return groups.map(g => `<span class="sg">${g.w > 0 ? fmtNum(g.w,2) : 'BW'}<span class="x">×</span>${g.reps.join(', ')}${g.pr ? trophy : ''}</span>`).join('');
+  const wu = u === 'lb' ? 'lb' : 'kg';
+  return groups.map(g => `<span class="sg">${g.w > 0 ? `${fmtNum(g.w,2)} ${wu}` : 'BW'} <span class="x">×</span> ${g.reps.join(', ')}${g.pr ? trophy : ''}</span>`).join('');
 }
 function fmtSetShort(s, type, u){ return type==='wr' ? (s.w > 0 ? `${fmtW(s.w,u)} × ${s.r}` : `BW × ${s.r}`) : fmtSet(s, type, u); }
 
@@ -654,7 +665,27 @@ function dialHTML(label, val, frac, color){
 const HEX = {green:'#16ec06', yellow:'#ffde00', red:'#ff3b4e'};
 const SCALE5 = ['', '#ff3b4e', '#ff8a3d', '#ffde00', '#9be15d', '#16ec06'];
 const recHex = v => v >= 67 ? HEX.green : v >= 34 ? HEX.yellow : HEX.red;
+function vTodayPlain(){
+  const a = A(), I = ix(S.aid), t = today(), u = unit();
+  const ws = weekStart(t), wk = I.dates.filter(d => d >= ws && d <= t), goal = a.goal || 4;
+  const wSets = wk.reduce((n,d) => n + I.dayStats[d].sets, 0), wVol = wk.reduce((n,d) => n + I.dayStats[d].vol, 0), prWeek = I.prs.filter(p => p.date >= ws).length;
+  const day = getDay(S.aid, t), entries = day ? day.entries : [], nSets = entries.reduce((n,e) => n + (Array.isArray(e.sets) ? e.sets.length : 0), 0);
+  const last7 = []; for (let i=6; i>=0; i--) last7.push(addDays(t,-i));
+  const maxS = Math.max(1, ...last7.map(d => I.dayStats[d] ? I.dayStats[d].sets : 0));
+  const strip = last7.map((d,i) => { const n = I.dayStats[d] ? I.dayStats[d].sets : 0; return `<button class="wd ${i===6?'today':''}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}, ${n} sets"><span class="s">${n || '–'}</span><span class="col"><i style="height:${n/maxS*100}%"></i></span><span class="l">${parseISO(d).toLocaleDateString(undefined,{weekday:'narrow'})}</span></button>`; }).join('');
+  const prs = I.prs.slice(-5).reverse();
+  return `<div class="wrap">${banners()}${topbar('Today', parseISO(t).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}))}
+    <h2 style="margin-bottom:10px">This week</h2>
+    <div class="figs" style="margin-bottom:18px"><div class="fig"><b>${wk.length}<small>/${goal}</small></b><span>workouts</span></div><div class="fig"><b>${wSets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(wVol,u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prWeek}</b><span>records</span></div></div>
+    <button class="btn primary wide" data-act="gotoToday">${nSets ? `Continue workout · ${nSets} sets` : 'Start workout'}</button>
+    ${entries.length ? `<div class="section" style="margin-top:22px"><h2>Today's workout</h2><div class="entries">${entries.map(e => entryHTML(e, I, t, u, 'openext')).join('')}</div></div>` : ''}
+    <div class="grid two" style="margin-top:16px">
+      <section class="tile"><h2>Last 7 days</h2><div class="week">${strip}</div><p class="muted small">Bars show sets per day.</p></section>
+      <section class="tile"><h2>Recent records</h2>${prs.length ? `<div class="list">${prs.map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">Beat a previous best and it shows up here.</p>'}</section>
+    </div></div>`;
+}
 function vToday(){
+  if (!scoresOn()) return vTodayPlain();
   const a = A(), I = ix(S.aid), t = today();
   const R = readiness(I, t), st = I.dayStrain[t] || 0;
   const ws = weekStart(t), wk = I.dates.filter(d => d >= ws && d <= t).length, goal = a.goal || 4;
@@ -696,19 +727,23 @@ function vToday(){
 function vLog(){
   const I = ix(S.aid), u = unit(), d = S.date, day = getDay(S.aid, d), ds = I.dayStats[d], st = I.dayStrain[d] || 0;
   const entries = day ? day.entries : [];
-  const list = entries.length ? entries.map(e => {
-    const m = exMeta(e.ex), h = (I.byEx[e.ex]||[]).find(x => x.date === d), sets = e.sets || [];
-    const notes = sets.map(s => s.note).filter(Boolean);
-    return `<button class="entry" data-act="openex" data-v="${esc(e.ex)}" aria-label="${esc(m.name)}, ${sets.length} sets"><div class="entry-h"><b>${esc(m.name)}</b><span>${sets.length ? `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}` : CATS[m.cat].name}</span></div>
-      ${sets.length ? `<div class="sline">${groupSets(sets, m.type, u, h ? h.prIdx : -1)}</div>${notes.length ? `<div class="enote">${esc(notes.join(' · '))}</div>` : ''}` : `<p class="muted small">No sets yet. Tap to log.</p>`}</button>`;
-  }).join('') : `<p class="empty" style="text-align:center;padding:28px 0 10px">Nothing logged on this day.</p>`;
+  const list = entries.length ? entries.map(e => entryHTML(e, I, d, u, 'openex')).join('') : `<p class="empty" style="text-align:center;padding:28px 0 10px">Nothing logged on this day.</p>`;
   const rpe = day && day.rpe;
+  return vLogBody(d, I, u, day, ds, st, entries, list, rpe);
+}
+function entryHTML(e, I, d, u, act){
+    const m = exMeta(e.ex), h = (I.byEx[e.ex]||[]).find(x => x.date === d), sets = Array.isArray(e.sets) ? e.sets : [];
+    const notes = sets.map(s => s.note).filter(Boolean);
+    return `<button class="entry" data-act="${act}" data-v="${esc(e.ex)}" aria-label="${esc(m.name)}, ${sets.length} sets"><div class="entry-h"><b>${esc(m.name)}</b><span>${sets.length ? `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}` : CATS[m.cat].name}</span></div>
+      ${sets.length ? `<div class="sline">${groupSets(sets, m.type, u, h ? h.prIdx : -1)}</div>${notes.length ? `<div class="enote">${esc(notes.join(' · '))}</div>` : ''}` : `<p class="muted small">No sets yet. Tap to log.</p>`}</button>`;
+}
+function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
   return `<div class="wrap">${banners()}
     <div class="dayhdr"><button class="icon-btn" data-act="day" data-v="-1" aria-label="Previous day">${IC.back}</button>
       <div class="daylbl"><h1>${relDay(d)}</h1><p class="sub">${parseISO(d).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})}</p><input type="date" id="datepick" value="${d}" data-ch="date" aria-label="Pick a date"></div>
       <button class="icon-btn" data-act="day" data-v="1" aria-label="Next day">${IC.next}</button></div>
     ${athleteIds().length > 1 ? `<div style="display:flex;justify-content:center;margin:10px 0 4px">${athSwitch()}</div>` : ''}
-    ${entries.length && ds ? `<div class="dayline"><span class="st"><b>${st.toFixed(1)}</b> strain</span><span><b>${ds.sets}</b> sets</span><span><b>${fmtVol(ds.vol,u)}</b> ${wUnit(u)}</span>${ds.dur ? `<span><b>${Math.round(ds.dur)}</b> min</span>` : ''}</div>` : '<div style="height:12px"></div>'}
+    ${entries.length && ds ? `<div class="dayline">${scoresOn() ? `<span class="st"><b>${st.toFixed(1)}</b> strain</span>` : ''}<span><b>${ds.sets}</b> sets</span><span><b>${fmtVol(ds.vol,u)}</b> ${wUnit(u)}</span>${ds.dur ? `<span><b>${Math.round(ds.dur)}</b> min</span>` : ''}</div>` : '<div style="height:12px"></div>'}
     <div class="entries">${list}</div>
     <div style="margin-top:14px"><button class="btn primary wide" data-act="addex">${IC.plus} Add exercise</button></div>
     <div class="actions"><button class="tbtn" data-act="copy">${IC.copy} Copy a workout</button><button class="tbtn" data-act="routines">${IC.list} Routines</button>${d === today() ? '' : `<button class="tbtn" data-act="gotoToday">Back to today</button>`}</div>
@@ -723,22 +758,22 @@ function vCal(){
   const I = ix(S.aid), u = unit(), ym = S.calMonth, first = parseISO(ym+'-01'), t = today();
   const start = weekStart(ym+'-01'); let cells = '';
   ['M','T','W','T','F','S','S'].forEach(h => cells += `<div class="h" aria-hidden="true">${h}</div>`);
-  let wcount = 0, sets = 0, vol = 0, strain = 0;
+  let wcount = 0, sets = 0, vol = 0, strain = 0; const sc = scoresOn();
   for (let i=0; i<42; i++) {
     const d = addDays(start, i); const inM = d.slice(0,7) === ym;
     if (i >= 35 && addDays(start,35).slice(0,7) !== ym) break;
     const cats = I.dayCats[d], s = I.dayStrain[d] || 0;
     if (inM && cats) { wcount++; sets += I.dayStats[d].sets; vol += I.dayStats[d].vol; strain += s; }
-    const bg = s && inM ? `background:rgba(0,147,231,${(0.1 + s/21*0.5).toFixed(2)})` : '';
-    cells += `<button class="cd ${cats?'has':''} ${inM?'':'out'} ${d===t?'today':''}" data-act="goto" data-v="${d}" style="${bg}" ${inM?'':'tabindex="-1" aria-hidden="true"'} aria-label="${fmtDateLong(d)}${cats?`, strain ${s.toFixed(1)}`:''}"><span class="d">${parseISO(d).getDate()}</span>${cats ? `<span class="dots">${Object.keys(cats).slice(0,5).map(c => `<i style="--c:${CATS[c].c}"></i>`).join('')}</span>` : ''}</button>`;
+    const bg = !inM || !cats ? '' : sc ? `background:rgba(0,147,231,${(0.1 + s/21*0.5).toFixed(2)})` : 'background:rgba(0,147,231,.35)';
+    cells += `<button class="cd ${cats?'has':''} ${inM?'':'out'} ${d===t?'today':''}" data-act="goto" data-v="${d}" style="${bg}" ${inM?'':'tabindex="-1" aria-hidden="true"'} aria-label="${fmtDateLong(d)}${cats ? (sc ? `, strain ${s.toFixed(1)}` : ', workout') : ''}"><span class="d">${parseISO(d).getDate()}</span>${cats ? `<span class="dots">${Object.keys(cats).slice(0,5).map(c => `<i style="--c:${CATS[c].c}"></i>`).join('')}</span>` : ''}</button>`;
   }
   const used = [...new Set(Object.entries(I.dayCats).filter(([d]) => d.slice(0,7)===ym).flatMap(([,c]) => Object.keys(c)))];
   const isNow = ym === t.slice(0,7);
   return `<div class="wrap">${banners()}
     <header class="top"><div class="t"><h1>${first.toLocaleDateString(undefined,{month:'long'})}</h1><p class="sub">${first.getFullYear()}</p></div><div class="row">${isNow ? '' : `<button class="chip" data-act="cal" data-v="0">This month</button>`}<button class="icon-btn" data-act="cal" data-v="-1" aria-label="Previous month">${IC.back}</button><button class="icon-btn" data-act="cal" data-v="1" aria-label="Next month">${IC.next}</button></div></header>
     ${athleteIds().length > 1 ? `<div style="margin:-8px 0 14px">${athSwitch()}</div>` : ''}
-    <div class="grid two"><div class="section" style="margin:0"><div class="cal">${cells}</div>${used.length ? `<div class="legend">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}<p class="muted small">Darker blue means a harder day. Dots are the muscle groups trained.</p></div>
-    <section class="tile" style="align-self:start"><h2>${first.toLocaleDateString(undefined,{month:'long'})} totals</h2><div class="figs"><div class="fig"><b>${wcount}</b><span>workouts</span></div><div class="fig"><b style="color:var(--link)">${wcount ? (strain/wcount).toFixed(1) : '–'}</b><span>avg strain</span></div><div class="fig"><b>${sets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(vol,u)}</b><span>${wUnit(u)} lifted</span></div></div></section></div></div>`;
+    <div class="grid two"><div class="section" style="margin:0"><div class="cal">${cells}</div>${used.length ? `<div class="legend">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}<p class="muted small">${sc ? 'Darker blue means a harder day. ' : 'Blue days have a workout. '}Dots are the muscle groups trained.</p></div>
+    <section class="tile" style="align-self:start"><h2>${first.toLocaleDateString(undefined,{month:'long'})} totals</h2><div class="figs"><div class="fig"><b>${wcount}</b><span>workouts</span></div>${sc ? `<div class="fig"><b style="color:var(--link)">${wcount ? (strain/wcount).toFixed(1) : '–'}</b><span>avg strain</span></div>` : `<div class="fig"><b style="color:var(--yellow)">${I.prs.filter(p => p.date.slice(0,7) === ym).length}</b><span>records</span></div>`}<div class="fig"><b>${sets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(vol,u)}</b><span>${wUnit(u)} lifted</span></div></div></section></div></div>`;
 }
 
 /* ---------- trends ---------- */
@@ -747,14 +782,15 @@ function vTrends(){
   const I = ix(S.aid), u = unit(), t = today(), n = RANGES[S.trendRange], from = addDays(t, -(n-1));
   const inR = I.dates.filter(d => d >= from && d <= t);
   const sumF = f => inR.reduce((a,d) => a + I.dayStats[d][f], 0);
+  const sc = scoresOn();
   const avgStrain = inR.length ? inR.reduce((a,d) => a + I.dayStrain[d], 0)/inR.length : 0;
   const prsR = I.prs.filter(p => p.date >= from);
   const chips = Object.keys(RANGES).map(k => `<button class="chip ${S.trendRange===k?'on':''}" data-act="trange" data-v="${k}">${k}</button>`).join('');
   const days = []; for (let i=n-1; i>=0; i--) days.push(addDays(t,-i));
   const step = n > 91 ? 3 : 1, readyPts = [];
-  days.forEach((d,i) => { if (i % step && i !== days.length-1) return; const r = readiness(I,d); if (r) readyPts.push({x:msOf(d), y:r.score}); });
+  if (sc) days.forEach((d,i) => { if (i % step && i !== days.length-1) return; const r = readiness(I,d); if (r) readyPts.push({x:msOf(d), y:r.score}); });
   const weeks = []; for (let w = weekStart(from); w <= t; w = addDays(w,7)) weeks.push(w);
-  const strainChart = n <= 31
+  const strainChart = !sc ? '' : n <= 31
     ? chartSlot({type:'bar', label:'Daily strain', labels:days.map(d => n <= 7 ? parseISO(d).toLocaleDateString(undefined,{weekday:'short'}) : String(parseISO(d).getDate())), series:[{values:days.map(d => I.dayStrain[d] || 0), color:'#0093e7'}], yMax:21, fmt:v => fmtNum(v,0), h:190})
     : chartSlot({type:'bar', label:'Weekly average strain', labels:weeks.map(w => xDate(msOf(w))), series:[{values:weeks.map(w => weekStrain(I, w, from, t)), color:'#0093e7'}], fmt:v => fmtNum(v,1), h:190});
   const volVals = weeks.map(w => { let s = 0; for (let i=0;i<7;i++) { const d = addDays(w,i); if (d < from || d > t) continue; const x = I.dayStats[d]; if (x) s += x.vol; } return u==='lb' ? s/LB : s; });
@@ -763,35 +799,38 @@ function vTrends(){
   const exCount = {}; inR.forEach(d => I.days[d].entries.forEach(e => { if (e.sets && e.sets.length) exCount[e.ex] = (exCount[e.ex]||0) + e.sets.length; }));
   const topEx = Object.entries(exCount).sort((a,b) => b[1]-a[1]).slice(0,6);
   const bw = Object.entries(I.body).filter(([d]) => d >= from).map(([d,w]) => ({x:msOf(d), y:u==='lb' ? w/LB : w}));
-  const fr = freshness(I, t);
+  const fr = sc ? freshness(I, t) : [];
   const ids = athleteIds();
   let team = '';
   if (ids.length > 1) {
     const w8 = []; for (let i=7; i>=0; i--) w8.push(addDays(weekStart(t), -7*i));
-    const series = ids.map(id => { const J = ix(id); return {name:S.athletes[id].name, color:S.athletes[id].color||COLORS[0], values:w8.map(w => weekStrain(J, w, '0000-00-00', t))}; });
+    const wVol = (J, w) => { let v = 0; for (let i=0;i<7;i++) { const x = J.dayStats[addDays(w,i)]; if (x) v += x.vol; } return u==='lb' ? v/LB : v; };
+    const series = ids.map(id => { const J = ix(id); return {name:S.athletes[id].name, color:S.athletes[id].color||COLORS[0], values:w8.map(w => sc ? weekStrain(J, w, '0000-00-00', t) : wVol(J, w))}; });
     const ws = weekStart(t);
-    const rows = ids.map(id => { const J = ix(id), a = S.athletes[id]; const dd = J.dates.filter(d => d >= ws && d <= t); const s = dd.reduce((x,d) => x + J.dayStrain[d], 0); const R = readiness(J,t);
-      return `<div class="lrow"><div class="grow"><div style="color:${esc(a.color)};font-weight:600">${esc(a.name)}</div><div class="meta">${dd.length} of ${a.goal||4} sessions</div></div><div style="text-align:right"><div class="num" style="font-size:22px;font-weight:700;color:var(--link)">${weekStrain(J, ws, '0000-00-00', t).toFixed(1)}</div><div class="meta">avg strain</div></div><div style="text-align:right;min-width:62px"><div class="num" style="font-size:22px;font-weight:700;color:${R ? recColor(R.score) : 'var(--mute)'}">${R ? R.score+'%' : '–'}</div><div class="meta">readiness</div></div></div>`; }).join('');
-    team = `<section class="tile span2"><h2>You two this week</h2><div class="list">${rows}</div><h3>Average daily strain by week</h3>${chartSlot({type:'bar', label:'Weekly strain by person', labels:w8.map(w => xDate(msOf(w))), series, fmt:v => fmtNum(v,1), h:170})}</section>`;
+    const rows = ids.map(id => { const J = ix(id), a = S.athletes[id]; const dd = J.dates.filter(d => d >= ws && d <= t); const s = dd.reduce((x,d) => x + J.dayStrain[d], 0); const R = sc ? readiness(J,t) : null;
+      const right = sc ? `<div style="text-align:right"><div class="num" style="font-size:22px;font-weight:700;color:var(--link)">${weekStrain(J, ws, '0000-00-00', t).toFixed(1)}</div><div class="meta">avg strain</div></div><div style="text-align:right;min-width:62px"><div class="num" style="font-size:22px;font-weight:700;color:${R ? recColor(R.score) : 'var(--mute)'}">${R ? R.score+'%' : '–'}</div><div class="meta">readiness</div></div>`
+        : `<div style="text-align:right"><div class="num" style="font-size:22px;font-weight:700">${dd.reduce((x,d) => x + J.dayStats[d].sets, 0)}</div><div class="meta">sets</div></div><div style="text-align:right;min-width:70px"><div class="num" style="font-size:22px;font-weight:700">${fmtVol(dd.reduce((x,d) => x + J.dayStats[d].vol, 0), u)}</div><div class="meta">${wUnit(u)}</div></div>`;
+      return `<div class="lrow"><div class="grow"><div style="color:${esc(a.color)};font-weight:600">${esc(a.name)}</div><div class="meta">${dd.length} of ${a.goal||4} sessions</div></div>${right}</div>`; }).join('');
+    team = `<section class="tile span2"><h2>You two this week</h2><div class="list">${rows}</div><h3>${sc ? 'Average daily strain by week' : `Weekly volume (${wUnit(u)})`}</h3>${chartSlot({type:'bar', label:'Weekly totals by person', labels:w8.map(w => xDate(msOf(w))), series, fmt:sc ? (v => fmtNum(v,1)) : (v => v >= 1000 ? fmtNum(v/1000,1)+'k' : fmtNum(v,0)), h:170})}</section>`;
   }
   return `<div class="wrap">${banners()}${topbar('Trends', A().name)}
     <div class="scroller" style="margin-bottom:18px">${chips}</div>
-    <div class="figs" style="margin-bottom:22px"><div class="fig"><b>${inR.length}</b><span>workouts</span></div><div class="fig"><b style="color:var(--link)">${inR.length ? avgStrain.toFixed(1) : '–'}</b><span>avg strain</span></div><div class="fig"><b>${fmtVol(sumF('vol'),u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prsR.length}</b><span>records</span></div></div>
+    <div class="figs" style="margin-bottom:22px"><div class="fig"><b>${inR.length}</b><span>workouts</span></div>${sc ? `<div class="fig"><b style="color:var(--link)">${inR.length ? avgStrain.toFixed(1) : '–'}</b><span>avg strain</span></div>` : `<div class="fig"><b>${sumF('sets')}</b><span>sets</span></div>`}<div class="fig"><b>${fmtVol(sumF('vol'),u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prsR.length}</b><span>records</span></div></div>
     <div class="grid two">
-      <section class="tile span2"><div class="tile-h"><h2>${n <= 31 ? 'Strain by day' : 'Average strain by week'}</h2><span class="muted small">0 to 21</span></div>${strainChart}</section>
+      ${sc ? `<section class="tile span2"><div class="tile-h"><h2>${n <= 31 ? 'Strain by day' : 'Average strain by week'}</h2><span class="muted small">0 to 21</span></div>${strainChart}</section>
       <section class="tile"><h2>Readiness</h2>${readyPts.length ? chartSlot({type:'line', label:'Readiness', series:[{pts:readyPts, color:'#16ec06'}], yMin:0, yMax:100, xfmt:xDate, fmt:v => Math.round(v)+'%', h:170, noArea:true, bands:[[0,34,'rgba(255,59,78,.08)'],[34,67,'rgba(255,222,0,.06)'],[67,100,'rgba(22,236,6,.06)']]}) : '<p class="empty">Appears once you have a workout or check-in in this range.</p>'}</section>
-      <section class="tile"><h2>Muscle freshness today</h2><div class="hbars">${fr.map(x => `<div class="hb"><span class="k">${CATS[x.c].name}</span><span class="tr"><i style="width:${x.v}%;background:${recColor(x.v)}"></i></span><span class="v">${x.v}%</span></div>`).join('')}</div></section>
-      <section class="tile"><div class="tile-h"><h2>Weekly volume</h2><span class="muted small">${wUnit(u)}</span></div>${chartSlot({type:'bar', label:'Weekly volume', labels:weeks.map(w => xDate(msOf(w))), series:[{values:volVals, color:'#7ba1bb'}], fmt:v => v >= 1000 ? fmtNum(v/1000,1)+'k' : fmtNum(v,0), h:170})}</section>
+      <section class="tile"><h2>Muscle freshness today</h2><div class="hbars">${fr.map(x => `<div class="hb"><span class="k">${CATS[x.c].name}</span><span class="tr"><i style="width:${x.v}%;background:${recColor(x.v)}"></i></span><span class="v">${x.v}%</span></div>`).join('')}</div></section>` : ''}
+      <section class="tile ${sc ? '' : 'span2'}"><div class="tile-h"><h2>Weekly volume</h2><span class="muted small">${wUnit(u)}</span></div>${chartSlot({type:'bar', label:'Weekly volume', labels:weeks.map(w => xDate(msOf(w))), series:[{values:volVals, color:'#7ba1bb'}], fmt:v => v >= 1000 ? fmtNum(v/1000,1)+'k' : fmtNum(v,0), h:170})}</section>
       <section class="tile"><h2>Sets by muscle group</h2>${Object.keys(cat).length ? `<div class="hbars">${CAT_ORDER.filter(c => cat[c]).map(c => `<div class="hb"><span class="k">${CATS[c].name}</span><span class="tr"><i style="width:${cat[c]/catMax*100}%;background:${CATS[c].c}"></i></span><span class="v">${cat[c]}</span></div>`).join('')}</div>` : '<p class="empty">No sets in this range.</p>'}</section>
       <section class="tile"><h2>Most trained</h2>${topEx.length ? `<div class="list">${topEx.map(([ex,c]) => `<button class="lrow" data-act="openexg" data-v="${esc(ex)}"><div class="grow"><div>${esc(exMeta(ex).name)}</div></div><span class="num muted">${c} sets</span></button>`).join('')}</div>` : '<p class="empty">No exercises in this range.</p>'}</section>
       <section class="tile"><h2>New records</h2>${prsR.length ? `<div class="list">${prsR.slice(-8).reverse().map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">No new bests in this range yet.</p>'}</section>
       <section class="tile"><div class="tile-h"><h2>Body weight</h2><span class="muted small">${wUnit(u)}</span></div>${bw.length ? chartSlot({type:'line', label:'Body weight', series:[{pts:bw, color:'#7ba1bb'}], xfmt:xDate, fmt:v => fmtNum(v,1), h:160}) : '<p class="empty">Log your weight in More to chart it here.</p>'}</section>
       ${team}
     </div>
-    <div class="prose" style="margin-top:30px"><h2 style="color:var(--fg)">How the scores work</h2>
+    ${sc ? `<div class="prose" style="margin-top:30px"><h2 style="color:var(--fg)">How the scores work</h2>
       <p><b>Strain</b> runs from 0 to 21. Every set adds to it, and sets closer to your best for that exercise add more. Cardio counts by minutes and pace, and the session effort you rate scales the day. Each point is harder to earn than the last.</p>
       <p><b>Readiness</b> compares your last 7 days of training with your 4-week average and drops after a very hard day. When you do the morning check-in, sleep, energy and soreness make up half the score. 67% and up is green, 34 to 66% yellow, under 34% red. It's estimated from your logs; there's no heart-rate data behind it.</p>
-      <p><b>Muscle freshness</b> is the training load on each muscle group over the last 10 days, halving every 2 days.</p></div>
+      <p><b>Muscle freshness</b> is the training load on each muscle group over the last 10 days, halving every 2 days.</p></div>` : ''}
   </div>`;
 }
 
@@ -803,6 +842,7 @@ function vMore(){
   const prof = ids.map(id => { const a = S.athletes[id];
     return `<section class="tile"><label class="field"><span>Name</span><input class="txt" id="an-${esc(id)}" data-ch="aname" data-v="${esc(id)}" value="${esc(a.name)}" maxlength="30"></label>
       <div class="field"><span>Weights and distances</span><div class="chips"><button class="chip ${(a.unit||'kg')==='lb'?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="unit" data-x="lb">lbs and miles</button><button class="chip ${(a.unit||'kg')==='kg'?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="unit" data-x="kg">kg and km</button></div></div>
+      <div class="field"><span>Today screen</span><div class="chips"><button class="chip ${a.scores !== false ? 'on' : ''}" data-act="aset" data-v="${esc(id)}" data-k="scores" data-x="1">Readiness and strain</button><button class="chip ${a.scores === false ? 'on' : ''}" data-act="aset" data-v="${esc(id)}" data-k="scores" data-x="0">Workouts only</button></div></div>
       <div class="field"><span>Rest timer after each set</span><div class="chips">${[0,60,90,120,180,240].map(s => `<button class="chip ${(a.rest??90)===s?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="rest" data-x="${s}">${s ? fmtDur(s) : 'Off'}</button>`).join('')}</div></div>
       <div class="field"><span>Workouts per week goal</span><div class="chips">${[2,3,4,5,6,7].map(g => `<button class="chip ${(a.goal||4)===g?'on':''}" data-act="aset" data-v="${esc(id)}" data-k="goal" data-x="${g}">${g}</button>`).join('')}</div></div>
       ${ids.length > 1 ? `<div class="field"><span>Chart color</span><div class="swatches">${COLORS.map(c => `<button class="sw ${a.color===c?'on':''}" style="--c:${c}" data-act="acolor" data-v="${esc(id)}" data-c="${c}" aria-label="Use this color"></button>`).join('')}</div></div>` : ''}
@@ -874,10 +914,23 @@ function trackHTML(ex, m, u){
       : `<p class="empty">Enter ${m.type==='wr' ? 'the weight and reps' : m.type==='r' ? 'your reps' : m.type==='t' ? 'a time' : 'a distance, a time, or both'}, then tap Save set.</p>`}
     ${en ? `<div class="actions"><button class="tbtn danger" data-act="removeex">${S.confirm==='removeex' ? 'Tap again to remove' : 'Remove from this day'}</button></div>` : ''}`;
 }
+// One weight in history: "30.0", keeping a second decimal only when it matters (e.g. 2.25 kg).
+const fmtW1 = (kg,u) => { const v = wRaw(kg,u); return Number.isInteger(Math.round(v*100)/10) ? v.toFixed(1) : v.toFixed(2); };
+function histRow(s, type, u, pr){
+  const trophy = pr ? `<span class="pr" aria-label="Personal record">${IC.trophy}</span>` : '';
+  const unitCell = (v, unit) => `${v}<i>${unit}</i>`;
+  let a = '', b = '';
+  if (type === 'wr') { a = s.w > 0 ? unitCell(fmtW1(s.w,u), wUnit(u)) : unitCell('BW', ''); b = unitCell(s.r, s.r === 1 ? 'rep' : 'reps'); }
+  else if (type === 'r') b = unitCell(s.r, s.r === 1 ? 'rep' : 'reps');
+  else if (type === 't') b = fmtDur(s.t);
+  else { a = s.d ? unitCell(fmtNum(dRaw(s.d,u),2), distU(u)) : ''; b = s.t ? fmtDur(s.t) : ''; }
+  return `<div class="hrow"><span class="ht">${trophy}</span><span class="hv">${a}</span><span class="hv">${b}</span>${s.note ? `<span class="hn">${esc(s.note)}</span>` : ''}</div>`;
+}
 function historyHTML(ex, m, u){
   const h = (ix(S.aid).byEx[ex] || []).slice().reverse();
   if (!h.length) return `<p class="empty">No history yet for ${esc(m.name)}.</p>`;
-  return h.slice(0,80).map(x => `<div class="hist"><button class="hd" data-act="goto" data-v="${esc(x.date)}">${fmtDateLong(x.date)}${x.date.slice(0,4)!==today().slice(0,4)?', '+x.date.slice(0,4):''}</button><div>${x.sets.map((s,i) => `<span class="pill">${esc(fmtSetShort(s,m.type,u))}${x.prIdx===i ? `<span class="pr">${IC.trophy}</span>` : ''}</span>`).join('')}</div>${m.type==='wr' ? `<p class="meta">${fmtVol(x.vol,u)} ${wUnit(u)} volume, best est. 1RM ${fmtE(x.top,u)}</p>` : ''}</div>`).join('') + (h.length > 80 ? `<p class="muted">Showing the latest 80 of ${h.length} sessions.</p>` : '');
+  const yr = today().slice(0,4);
+  return h.slice(0,80).map(x => `<section class="hday"><button class="hdh" data-act="goto" data-v="${esc(x.date)}">${parseISO(x.date).toLocaleDateString(undefined, x.date.slice(0,4) === yr ? {weekday:'long', month:'long', day:'numeric'} : {weekday:'long', month:'long', day:'numeric', year:'numeric'})}</button>${x.sets.map((st,i) => histRow(st, m.type, u, i === x.prIdx)).join('')}</section>`).join('') + (h.length > 80 ? `<p class="muted">Showing the latest 80 of ${h.length} sessions.</p>` : '');
 }
 const GMETRICS = {
   wr:[['top','Est. 1RM'],['maxW','Heaviest'],['vol','Volume'],['maxR','Most reps'],['reps','Total reps']],
@@ -1005,6 +1058,7 @@ const ACT = {
   addcat(el){ S.addCat = el.dataset.v; S.addQ = ''; render(); },
   pickex(el){ openEx(el.dataset.v); },
   openex(el){ openEx(el.dataset.v); },
+  openext(el){ S.date = today(); openEx(el.dataset.v); },
   openexg(el){ S.date = today(); openEx(el.dataset.v, 'graph'); },
   newex(){ openSheet({kind:'newex'}); render(); },
   savenewex(){
@@ -1072,7 +1126,7 @@ const ACT = {
   delrt(el){ const k = 'delrt'+el.dataset.v; if (S.confirm !== k) { S.confirm = k; render(); return; } S.confirm = null; patchDoc('library/routines', {items:{[el.dataset.v]:null}}); },
   setme(el){ for (const id of athleteIds()) if (S.athletes[id].me && id !== el.dataset.v) patchDoc(`athletes/${id}`, {me:false}); patchDoc(`athletes/${el.dataset.v}`, {me:true}); S.aid = el.dataset.v; pref.set('aid', S.aid); toast('Liftlog will open to this profile'); },
   acolor(el){ patchDoc(`athletes/${el.dataset.v}`, {color:el.dataset.c}); },
-  aset(el){ const k = el.dataset.k, x = el.dataset.x; patchDoc(`athletes/${el.dataset.v}`, {[k]: k==='unit' ? x : +x}); },
+  aset(el){ const k = el.dataset.k, x = el.dataset.x; patchDoc(`athletes/${el.dataset.v}`, {[k]: k==='unit' ? x : k==='scores' ? x==='1' : +x}); },
   addath(){ const n = $('#new-ath').value.trim(); if (!n) return toast('Enter a name.', 'err'); const ids = athleteIds(); patchDoc(`athletes/a${uid()}`, {name:n, color:COLORS[ids.length % COLORS.length], unit:unit(), rest:90, goal:4, created:Date.now()}); },
   delath(el){ const id = el.dataset.v, k = 'delath'+id; if (S.confirm !== k) { S.confirm = k; render(); return; } S.confirm = null; for (const p of Object.keys(DOCS)) if (p.startsWith(`athletes/${id}/months/`)) delDoc(p); delDoc(`athletes/${id}`); toast('Profile deleted'); },
   logbw(){ const v = num($('#bw-in').value); if (!(v > 20 && v < 700)) return toast('Enter your body weight.', 'err'); const t = today(); patchDoc(monthPath(S.aid, t.slice(0,7)), {ym:t.slice(0,7), body:{[t]: unit()==='lb' ? v*LB : v}}); toast('Body weight saved'); },
@@ -1108,7 +1162,7 @@ function cleanDoc(p, v){
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   if (/^athletes\/a[a-z0-9]{1,30}$/.test(p)) {
     const name = str(v.name, 30).trim(); if (!name) return null;
-    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true};
+    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, scores:v.scores !== false};
   }
   const mm = p.match(/^athletes\/a[a-z0-9]{1,30}\/months\/(\d{4}-\d{2})$/);
   if (mm) {
