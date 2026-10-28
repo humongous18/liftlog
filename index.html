@@ -36,6 +36,11 @@
 html,body{margin:0;background:var(--bg);height:100%}
 html{padding-top:env(safe-area-inset-top,0px)}
 body{color:var(--fg);font:16px/1.45 var(--f-body);-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+/* App feel: labels, headings and numbers aren't selectable and long-press shows no copy menu; fields you type in still are. */
+html{touch-action:manipulation}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+img,svg{-webkit-user-drag:none}
 body.lock{overflow:hidden}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:40;background:var(--bg)}
 [hidden]{display:none!important}
