@@ -281,6 +281,25 @@ textarea.txt{min-height:80px;resize:vertical}
 .dbox .chip.on{background:var(--fg)}
 .dout{text-align:center;padding:12px;border-radius:14px;background:var(--bg)}
 .dout .big{font-size:46px}
+.bwcard{display:flex;flex-direction:column;gap:8px}
+.pillbtn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:999px;background:var(--tile2);color:var(--link);font-weight:600;font-size:15px}
+.pillbtn svg{width:16px;height:16px}
+.bwbody{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left}
+.bwnow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.bwnow .big{font-size:44px}
+.bwnow .big small{font-size:.45em}
+.bwfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;color:var(--mute)}
+.bwfoot .more{color:var(--link);font-weight:600;white-space:nowrap}
+.dash{display:inline-flex;align-items:center;gap:8px}
+.dash svg{flex:none}
+.goalrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--tile)}
+.goalrow b{font-family:var(--f-num);font-size:20px}
+.goaltag{display:inline-flex;align-self:flex-end;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--tile);color:var(--green);font-size:13px;font-weight:600}
+.bwchart{display:flex;flex-direction:column;gap:6px}
+.bwrow{display:grid;grid-template-columns:minmax(0,1fr) auto 64px;align-items:baseline;gap:10px;width:100%;text-align:left;padding:11px 2px;border-bottom:1px solid var(--hair)}
+.bwrow .dt{font-size:15px;color:var(--mute)}
+.bwrow b{font-family:var(--f-num);font-size:22px;font-weight:600}
+.bwrow .ch{text-align:right;font-size:14px;color:var(--mute)}
 .roundrow{display:flex;align-items:center;gap:10px}
 .roundrow .txt{width:90px;flex:none;text-align:center;font-family:var(--f-num);font-size:20px;font-weight:600;background:var(--tile2)}
 .roundrow .txt:disabled{opacity:.4}
@@ -615,7 +634,99 @@ function prText(p, aid){ const m = exMeta(p.ex), u = unitOf(aid); return m.type=
 let CHARTS = {}, chartN = 0;
 function chartSlot(spec){ const id = 'c'+(++chartN); CHARTS[id] = spec; return `<div class="chart" data-chart="${id}" style="height:${spec.h||180}px"></div>`; }
 function drawCharts(){ document.querySelectorAll('[data-chart]').forEach(el => { const sp = CHARTS[el.dataset.chart]; if (sp) el.innerHTML = svgChart(sp, el.clientWidth || 320); }); }
+// ---- body weight ----
+const f1w = v => (Math.round(v*10)/10).toFixed(1); // weights always show one decimal, like 175.0
+const DASH = (w=22) => `<svg width="${w}" height="4" viewBox="0 0 ${w} 4" aria-hidden="true"><line x1="0" x2="${w}" y1="2" y2="2" stroke="#16ec06" stroke-width="2" stroke-dasharray="5 4"/></svg>`;
+function bodyList(aid){ const b = ix(aid).body; return Object.keys(b).sort().map(d => ({d, kg:b[d]})); }
+const goalOf = aid => { const g = (S.athletes[aid] || {}).wgoal; return isNum(g, 10, 400) ? g : null; };
+// The y range a weight chart uses: fitted to the weights, or stretched to include the goal line.
+function weightScale(ys, goal, fit){
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  if (goal != null && !fit) { lo = Math.min(lo, goal); hi = Math.max(hi, goal); }
+  const pad = Math.max(0.6, (hi - lo) * 0.1); lo -= pad; hi += pad;
+  return {lo, hi, goalIn: goal != null && goal >= lo && goal <= hi};
+}
+function weightChart(sp, W){
+  const H = sp.h, compact = !!sp.compact, L = compact ? 3 : 40, R = compact ? 7 : 12, T = compact ? 8 : 14, B = compact ? 8 : 26, iw = W - L - R, ih = H - T - B;
+  const pts = sp.pts; if (!pts.length) return '';
+  const sc = weightScale(pts.map(p => p.y), sp.goal, sp.fit);
+  const x0 = sp.x0, x1 = Math.max(sp.x1, x0 + 864e5);
+  const X = v => L + (v - x0) / (x1 - x0) * iw, Y = v => T + ih - (v - sc.lo) / (sc.hi - sc.lo) * ih;
+  const lbl = (x, y, t, a) => `<text x="${x}" y="${y}" text-anchor="${a}" fill="#a3aeb5" style="font-family:var(--f-num);font-size:12px;font-weight:600">${esc(t)}</text>`;
+  let o = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sp.label)}">`;
+  if (!compact) {
+    const dec = sc.hi - sc.lo < 6 ? 1 : 0;
+    [0, .5, 1].forEach(f => { const v = sc.lo + (sc.hi - sc.lo) * f, yy = Y(v); o += `<line x1="${L}" x2="${W-R}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="#232a2f" stroke-width="1"/>` + lbl(L - 6, (yy + 4).toFixed(1), v.toFixed(dec), 'end'); });
+    o += lbl(L, H - 6, xDate(x0), 'start') + lbl(L + iw/2, H - 6, xDate((x0 + x1)/2), 'middle') + lbl(W - R, H - 6, sp.endLabel || xDate(x1), 'end');
+  }
+  const d = pts.map((p,i) => `${i?'L':'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
+  const gid = 'g' + (++chartN);
+  if (pts.length > 1) o += `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4cbaff" stop-opacity=".26"/><stop offset="1" stop-color="#4cbaff" stop-opacity="0"/></linearGradient></defs><path d="${d}L${X(pts[pts.length-1].x).toFixed(1)},${T+ih}L${X(pts[0].x).toFixed(1)},${T+ih}Z" fill="url(#${gid})"/>`;
+  if (sc.goalIn) { const gy = Y(sp.goal).toFixed(1); o += `<line x1="${L}" x2="${W-R}" y1="${gy}" y2="${gy}" stroke="#16ec06" stroke-width="1.7" stroke-dasharray="7 6"/>`; if (!compact) o += `<text x="${W-R}" y="${(Y(sp.goal) - 7).toFixed(1)}" text-anchor="end" fill="#16ec06" style="font-size:13px;font-weight:600">Goal ${esc(f1w(sp.goal))}</text>`; }
+  o += `<path d="${d}" fill="none" stroke="#4cbaff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  if (!compact && pts.length <= 40) pts.forEach(p => { o += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="2.4" fill="#4cbaff"><title>${esc(xDate(p.x))}: ${esc(f1w(p.y))}</title></circle>`; });
+  const lp = pts[pts.length-1];
+  return o + `<circle cx="${X(lp.x).toFixed(1)}" cy="${Y(lp.y).toFixed(1)}" r="${compact ? 4.5 : 5}" fill="#050708" stroke="#4cbaff" stroke-width="2.5"/></svg>`;
+}
+// Today card
+function bwCardHTML(){
+  const u = unit(), list = bodyList(S.aid), goal = goalOf(S.aid), t = today(), from = addDays(t, -30);
+  const head = `<div class="tile-h" style="align-items:center"><h2>Body weight</h2><button class="pillbtn" data-act="bwlog">${IC.plus} Log weight</button></div>`;
+  if (!list.length) return `<section class="tile bwcard">${head}<p class="empty">Log your weight to start a chart${goal == null ? ' and set a goal' : ''}.</p></section>`;
+  const cur = list[list.length-1], recent = list.filter(e => e.d >= from), first = recent.length > 1 ? recent[0] : null;
+  const toU = kg => wRaw(kg, u), ch = first ? toU(cur.kg) - toU(first.kg) : null;
+  const goalU = goal != null ? toU(goal) : null, curU = toU(cur.kg);
+  const toward = ch != null && goalU != null && Math.abs(curU - goalU) < Math.abs(toU(first.kg) - goalU);
+  const pts = (recent.length ? recent : [cur]).map(e => ({x:msOf(e.d), y:toU(e.kg)}));
+  const left = goalU != null ? Math.abs(curU - goalU) : null;
+  return `<section class="tile bwcard">${head}
+    <button class="bwbody" data-act="bwopen" aria-label="Open body weight">
+      <span class="bwnow"><span class="big">${f1w(curU)}<small> ${wUnit(u)}</small></span>${ch != null ? `<span><b style="color:${toward ? 'var(--green)' : 'var(--fg)'};font-weight:600">${ch <= 0 ? '−' : '+'}${f1w(Math.abs(ch))} ${wUnit(u)}</b><span class="muted"> in 30 days</span></span>` : `<span class="muted small">${cur.d === t ? 'Logged today' : 'Last logged ' + fmtDateShort(cur.d)}</span>`}</span>
+      ${chartSlot({type:'weight', compact:true, label:'Body weight, last 30 days', pts, goal:goalU, fit:false, x0:msOf(from), x1:msOf(t), h:92})}
+      <span class="bwfoot"><span class="dash">${goalU != null ? `${DASH()}Goal ${f1w(goalU)} ${wUnit(u)} · ${left < 0.05 ? 'reached' : f1w(left) + ' ' + wUnit(u) + ' to go'}` : 'No goal set'}</span><span class="more">Details ›</span></span>
+    </button></section>`;
+}
+// Body weight sheet
+const BW_RANGES = {'1M':30,'3M':91,'6M':182,'1Y':365,'All':0};
+function shBw(){
+  const u = unit(), list = bodyList(S.aid), goal = goalOf(S.aid), t = today(), rk = S.bwRange || '3M', fit = !!pref.get('bwfit', false);
+  const toU = kg => wRaw(kg, u), goalU = goal != null ? toU(goal) : null;
+  const span = BW_RANGES[rk], from = span ? addDays(t, -span) : (list[0] ? list[0].d : t);
+  const inR = list.filter(e => e.d >= from), cur = list[list.length-1];
+  const chips = Object.keys(BW_RANGES).map(k => `<button class="chip ${rk===k?'on':''}" data-act="bwrange" data-v="${k}" aria-pressed="${rk===k}">${k}</button>`).join('');
+  let chart = '<p class="empty">No weights in this range.</p>', below = '';
+  if (inR.length) {
+    const pts = inR.map(e => ({x:msOf(e.d), y:toU(e.kg)}));
+    chart = chartSlot({type:'weight', label:'Body weight chart', pts, goal:goalU, fit, x0:msOf(from), x1:msOf(t), endLabel:'Today', h:232});
+    const sc = weightScale(pts.map(p => p.y), goalU, fit);
+    if (goalU != null && !sc.goalIn) below = `<span class="goaltag">${DASH(18)}Goal ${f1w(goalU)} is ${goalU < sc.lo ? 'below' : 'above'} this view</span>`;
+  }
+  const ch = inR.length > 1 ? toU(inR[inR.length-1].kg) - toU(inR[0].kg) : null;
+  const curU = cur ? toU(cur.kg) : null;
+  const toward = ch != null && goalU != null && Math.abs(curU - goalU) < Math.abs(toU(inR[0].kg) - goalU);
+  const rows = list.slice().reverse().slice(0, 30).map((e, i, arr) => { const prev = list[list.length - 2 - i]; const dd = prev ? toU(e.kg) - toU(prev.kg) : null;
+    return `<button class="bwrow" data-act="bwedit" data-v="${esc(e.d)}" aria-label="Edit ${esc(fmtDateLong(e.d))}"><span class="dt">${esc(fmtDateLong(e.d))}${e.d === t ? ' · Today' : ''}</span><span><b>${f1w(toU(e.kg))}</b><span class="muted small"> ${wUnit(u)}</span></span><span class="ch" style="${dd != null && goalU != null && Math.abs(toU(e.kg) - goalU) < Math.abs(toU(prev.kg) - goalU) ? 'color:var(--green)' : ''}">${dd == null ? '' : (dd >= 0.05 ? '+' : dd <= -0.05 ? '−' : '') + f1w(Math.abs(dd))}</span></button>`; }).join('');
+  return sheetTop('Body weight', athleteIds().length > 1 ? A().name : '') + `<div class="sh-body">
+    <div class="figs three"><div class="fig"><b>${cur ? f1w(curU) : '–'}</b><span>${wUnit(u)} now</span></div><div class="fig"><b style="${toward ? 'color:var(--green)' : ''}">${ch == null ? '–' : (ch <= 0 ? '−' : '+') + f1w(Math.abs(ch))}</b><span>${wUnit(u)} in ${rk === 'All' ? 'all time' : rk}</span></div><div class="fig"><b>${goalU != null && cur ? f1w(Math.abs(curU - goalU)) : '–'}</b><span>${wUnit(u)} to goal</span></div></div>
+    <div class="rowsb"><div class="chips" role="group" aria-label="Range">${chips}</div><button class="chip ${fit?'on':''}" data-act="bwfit" aria-pressed="${fit}" title="Zoom the chart to your weights">Fit</button></div>
+    <div class="bwchart">${chart}${below}</div>
+    <div class="goalrow"><span class="dash">${goalU != null ? `${DASH()}Goal <b>${f1w(goalU)}</b> ${wUnit(u)}` : '<span class="muted">No goal set</span>'}</span><button class="link" data-act="bwgoal">${goalU != null ? 'Edit goal' : 'Set goal'}</button></div>
+    <button class="btn primary wide" data-act="bwlog">${IC.plus} Log weight</button>
+    ${rows ? `<div><h2 style="margin-bottom:4px">Recent entries</h2><div class="list">${rows}</div></div>` : ''}
+  </div>`;
+}
+function openBwDlg(kind, date){
+  const u = unit(), list = bodyList(S.aid), t = today(), d = date || t;
+  const at = list.find(e => e.d === d), last = list[list.length-1], goal = goalOf(S.aid);
+  const pick = d !== t && d !== addDays(t,-1);
+  S.menu = false;
+  if (kind === 'bwlog') S.dlg = {kind, u, date:d, pick, bw: at ? String(wRaw(at.kg,u)) : last ? String(wRaw(last.kg,u)) : ''};
+  else S.dlg = {kind, u, goal: goal != null ? String(wRaw(goal,u)) : last ? String(Math.round(wRaw(last.kg,u))) : ''};
+  try { history.pushState({dlg:true, sheet:!!S.sheet}, ''); } catch {}
+  render();
+}
 function svgChart(sp, W){
+  if (sp.type === 'weight') return weightChart(sp, Math.max(220, Math.floor(W)));
   W = Math.max(220, Math.floor(W)); const H = sp.h || 180, L = 40, R = 14, T = 14, B = 24, iw = W-L-R, ih = H-T-B;
   const fmt = sp.fmt || (v => fmtNum(v, v < 10 ? 1 : 0));
   const txt = (x,y,s,anchor='end') => `<text x="${x}" y="${y}" text-anchor="${anchor}" fill="#a3aeb5" style="font-family:var(--f-num);font-size:12px">${esc(s)}</text>`;
@@ -755,8 +866,7 @@ function vTodayPlain(){
   return `<div class="wrap">${banners()}${topbar('Today', parseISO(t).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}))}
     <section class="tile"><div class="tile-h"><h2>This week</h2><span class="wkgoal"><b>${wk.length}</b>/${goal} workouts</span></div><div class="week">${strip}</div><p class="muted small">Bars show sets per day.</p></section>
     <button class="btn primary wide" style="margin-top:14px" data-act="gotoToday">${nSets ? `Continue workout · ${nSets} sets` : 'Start workout'}</button>
-    <div class="figs three" style="margin-top:18px"><div class="fig"><b>${wSets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(wVol,u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prWeek}</b><span>records</span></div></div>
-    <section class="tile" style="margin-top:18px"><h2>Recent records</h2>${prs.length ? `<div class="list">${prs.map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">Beat a previous best and it shows up here.</p>'}</section>
+    <div style="margin-top:16px">${bwCardHTML()}</div>
   </div>`;
 }
 function vToday(){
@@ -788,6 +898,7 @@ function vToday(){
     </section>
     <p class="coach">${coach}</p>
     <button class="btn primary wide" data-act="gotoToday">${nSets ? `Continue workout · ${nSets} sets` : 'Start workout'}</button>
+    <div style="margin-top:16px">${bwCardHTML()}</div>
     <div class="grid two" style="margin-top:16px">
       <section class="tile" aria-labelledby="h-chk"><div class="tile-h"><h2 id="h-chk">Morning check-in</h2><span class="muted small">${c ? 'Saved' : 'Not done yet'}</span></div>
         <div class="rowsb"><div><div class="big">${fmtNum(cv.sleep,1)}<small> h sleep</small></div></div>
@@ -923,7 +1034,7 @@ function vTrends(){
       <section class="tile"><h2>Sets by muscle group</h2>${Object.keys(cat).length ? `<div class="hbars">${CAT_ORDER.filter(c => cat[c]).map(c => `<div class="hb"><span class="k">${CATS[c].name}</span><span class="tr"><i style="width:${cat[c]/catMax*100}%;background:${CATS[c].c}"></i></span><span class="v">${cat[c]}</span></div>`).join('')}</div>` : '<p class="empty">No sets in this range.</p>'}</section>
       <section class="tile"><h2>Most trained</h2>${topEx.length ? `<div class="list">${topEx.map(([ex,c]) => `<button class="lrow" data-act="openexg" data-v="${esc(ex)}"><div class="grow"><div>${esc(exMeta(ex).name)}</div></div><span class="num muted">${c} sets</span></button>`).join('')}</div>` : '<p class="empty">No exercises in this range.</p>'}</section>
       <section class="tile"><h2>New records</h2>${prsR.length ? `<div class="list">${prsR.slice(-8).reverse().map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">No new bests in this range yet.</p>'}</section>
-      <section class="tile"><div class="tile-h"><h2>Body weight</h2><span class="muted small">${wUnit(u)}</span></div>${bw.length ? chartSlot({type:'line', label:'Body weight', series:[{pts:bw, color:'#7ba1bb'}], xfmt:xDate, fmt:v => fmtNum(v,1), h:160}) : '<p class="empty">Log your weight in More to chart it here.</p>'}</section>
+      <section class="tile"><div class="tile-h"><h2>Body weight</h2><span class="muted small">${wUnit(u)}</span></div>${bw.length ? chartSlot({type:'weight', label:'Body weight', pts:bw.slice().sort((a,b) => a.x - b.x), goal:goalOf(S.aid) != null ? wRaw(goalOf(S.aid), u) : null, fit:false, x0:msOf(from), x1:msOf(t), endLabel:'Today', h:180}) : '<p class="empty">Log your weight on Today to chart it here.</p>'}</section>
       ${team}
     </div>
     ${sc ? `<div class="prose" style="margin-top:30px"><h2 style="color:var(--fg)">How the scores work</h2>
@@ -957,9 +1068,6 @@ function vMore(){
     <div class="section"><h2>${ids.length > 1 ? 'Profiles' : 'Profile'}</h2><div class="grid two">${prof}
       ${ids.length < 4 ? `<section class="tile"><label class="field"><span>Add a profile for someone who shares this phone</span><div class="row"><input class="txt" id="new-ath" maxlength="30" placeholder="Name"><button class="btn" data-act="addath">Add</button></div></label></section>` : ''}</div></div>
     <div class="section"><h2>Rest timer alerts</h2><section class="tile">${notifyHTML()}</section></div>
-    <div class="section"><h2>Body weight</h2><section class="tile">
-      <div class="row"><input class="txt" id="bw-in" inputmode="decimal" placeholder="Today's weight in ${wUnit(u)}" aria-label="Body weight in ${wUnit(u)}"><button class="btn" data-act="logbw">Save</button></div>
-      ${bwList.length ? `<div class="list">${bwList.map(([d,w]) => `<div class="lrow"><div class="grow"><div class="num" style="font-size:19px">${fmtW(w,u)} ${wUnit(u)}</div></div><span class="meta">${fmtDateShort(d)}</span><button class="link danger" data-act="delbw" data-v="${esc(d)}">Remove</button></div>`).join('')}</div>` : ''}</section></div>
     <div class="section"><h2>Backup</h2><section class="tile">
       <p class="muted">Your workouts live on this phone only. Save a backup file now and then${daysSince != null ? `; the last one was ${daysSince === 0 ? 'today' : daysSince === 1 ? 'yesterday' : daysSince + ' days ago'}` : ''}. You can also send a backup to your partner and add it to their phone to compare training.</p>
       <button class="btn primary" data-act="backup">Save backup file</button>
@@ -1128,7 +1236,7 @@ function openDlg(kind){
   const best = ex ? wRaw(bestE1(ex), u) : 0;
   S.menu = false;
   S.dlg = {kind, u, w:String(w || ''), r:String(r), max:String(w || best || ''), pct:'85', roundOn: pref.get('roundOn.'+u, true), roundTo: String(pref.get('roundTo.'+u, ROUND_DEFAULT[u])), pw:String(w || (u==='lb' ? 135 : 60)), settings:false};
-  try { history.pushState({dlg:true}, ''); } catch {}
+  try { history.pushState({dlg:true, sheet:true}, ''); } catch {}
   render();
 }
 function closeDlg(){ if (backPending) return; if (history.state && history.state.dlg) { popOurs(1); return; } S.dlg = null; render(); }
@@ -1168,6 +1276,20 @@ function dlgOut(){
 function setCalcResult(){ const D = S.dlg, max = num(D.max) || 0, pct = num(D.pct) || 0, step = num(D.roundTo); let v = max*pct/100; if (D.roundOn && step > 0) v = Math.round(v/step)*step; return v; }
 function dlgHTML(){
   const D = S.dlg, u = D.u, U = wUnit(u);
+  if (D.kind === 'bwlog') {
+    const t = today(), y = addDays(t,-1), cur = D.pick ? 'pick' : D.date === t ? 't' : 'y', exists = bodyList(S.aid).some(e => e.d === D.date);
+    return `<h2 id="dlg-t">Log weight</h2>
+      <div class="chips"><button class="chip ${cur==='t'?'on':''}" data-act="bwday" data-v="t">Today</button><button class="chip ${cur==='y'?'on':''}" data-act="bwday" data-v="y">Yesterday</button><button class="chip ${cur==='pick'?'on':''}" data-act="bwday" data-v="pick">Pick a date</button></div>
+      ${cur === 'pick' ? `<input class="txt" type="date" id="dl-date" data-ch="bwdate" value="${esc(D.date)}" max="${t}" aria-label="Date">` : ''}
+      ${dstepper('bw', `Weight (${U})`, 'decimal')}
+      <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="bwsave">Save</button></div>
+      ${exists ? `<button class="link danger" data-act="bwdel" style="align-self:center;padding:6px">Delete this entry</button>` : ''}`;
+  }
+  if (D.kind === 'bwgoal') {
+    return `<h2 id="dlg-t">Weight goal</h2>${dstepper('goal', `Goal (${U})`, 'decimal')}
+      <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="goalsave">Save goal</button></div>
+      ${goalOf(S.aid) != null ? `<button class="link danger" data-act="goalclear" style="align-self:center;padding:6px">Remove goal</button>` : ''}`;
+  }
   if (D.kind === '1rm') return `<h2 id="dlg-t">1RM Calculator</h2>${dstepper('w', `Weight (${U})`, 'decimal')}${dstepper('r', 'Reps', 'numeric')}<div id="dl-out">${dlgOut()}</div><div class="dbtns"><button class="btn" data-act="dlgclose">Close</button></div>`;
   if (D.kind === 'set') {
     const best = S.sheet && S.sheet.ex ? bestE1(S.sheet.ex) : 0;
@@ -1185,11 +1307,11 @@ function dlgHTML(){
 }
 function renderDlg(){
   const el = $('#dlg');
-  if (!S.dlg || !S.sheet) { S.dlg = null; el.hidden = true; el.innerHTML = ''; return; }
+  if (!S.dlg || (!S.sheet && !/^bw/.test(S.dlg.kind))) { S.dlg = null; el.hidden = true; el.innerHTML = ''; return; }
   el.innerHTML = `<div class="dscrim" data-act="dlgclose"></div><div class="dbox" role="dialog" aria-modal="true" aria-labelledby="dlg-t">${dlgHTML()}</div>`;
   el.hidden = false;
 }
-const SHEETS = {ex:shEx, add:shAdd, newex:shNewEx, copy:shCopy, routines:shRoutines};
+const SHEETS = {bw:shBw, ex:shEx, add:shAdd, newex:shNewEx, copy:shCopy, routines:shRoutines};
 
 /* ================= actions ================= */
 // Opening a sheet adds a history entry so the Android back button closes the sheet instead of leaving the app.
@@ -1197,7 +1319,7 @@ function openSheet(obj){ if (!S.sheet) { try { history.pushState({sheet:true}, '
 // Sheets and dialogs each add one history entry. Closing them steps back exactly once (repeat taps are ignored
 // until the browser reports the step), so the back button never skips past the screen underneath.
 let backPending = false;
-const ourDepth = () => { const st = history.state || {}; return st.dlg ? 2 : st.sheet ? 1 : 0; };
+const ourDepth = () => { const st = history.state || {}; return st.dlg ? (st.sheet === false ? 1 : 2) : st.sheet ? 1 : 0; };
 function popOurs(n){ if (backPending || !n) return; backPending = true; try { history.go(-n); } catch { backPending = false; } }
 function clearSheet(){ S.menu = false; S.dlg = null; S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); }
 function dropSheet(){ const n = ourDepth(); clearSheet(); popOurs(n); }
@@ -1254,10 +1376,21 @@ const ACT = {
   dlgclose(){ closeDlg(); },
   dstep(el){
     const f = el.dataset.f, dir = +el.dataset.v, inp = $('#dl-'+f), u = S.dlg.u;
-    const inc = f === 'r' ? 1 : f === 'pct' ? 2.5 : (u === 'lb' ? 5 : 2.5);
+    const inc = f === 'r' ? 1 : f === 'pct' ? 2.5 : f === 'bw' ? (u === 'lb' ? 0.2 : 0.1) : f === 'goal' ? (u === 'lb' ? 1 : 0.5) : (u === 'lb' ? 5 : 2.5);
     let v = Math.max(0, Math.round(((num(inp.value) || 0) + dir*inc)*100)/100); if (f === 'pct') v = Math.min(v, 150);
-    inp.value = String(v); S.dlg[f] = inp.value; $('#dl-out').innerHTML = dlgOut();
+    inp.value = String(v); S.dlg[f] = inp.value; const o = $('#dl-out'); if (o) o.innerHTML = dlgOut();
   },
+  bwopen(){ openSheet({kind:'bw'}); render(); },
+  bwlog(){ openBwDlg('bwlog'); },
+  bwedit(el){ openBwDlg('bwlog', el.dataset.v); },
+  bwgoal(){ openBwDlg('bwgoal'); },
+  bwrange(el){ S.bwRange = el.dataset.v; render(); },
+  bwfit(){ pref.set('bwfit', !pref.get('bwfit', false)); render(); },
+  bwday(el){ const D = S.dlg, t = today(), v = el.dataset.v; D.pick = v === 'pick'; if (v === 't') D.date = t; else if (v === 'y') D.date = addDays(t,-1); else if (D.date === t) D.date = addDays(t,-2); const at = bodyList(S.aid).find(e => e.d === D.date); if (at) D.bw = String(wRaw(at.kg, D.u)); renderDlg(); },
+  bwsave(){ const D = S.dlg, v = num(D.bw), kg = D.u === 'lb' ? v*LB : v; if (!(kg >= 20 && kg <= 400)) return toast('Enter your weight.', 'err'); if (!DATE_RE.test(D.date) || D.date > today()) return toast('Pick a day up to today.', 'err'); patchDoc(monthPath(S.aid, D.date.slice(0,7)), {ym:D.date.slice(0,7), body:{[D.date]: kg}}); closeDlg(); toast('Weight saved'); },
+  bwdel(){ const d = S.dlg.date; patchDoc(monthPath(S.aid, d.slice(0,7)), {body:{[d]: null}}); closeDlg(); toast('Entry deleted'); },
+  goalsave(){ const D = S.dlg, v = num(D.goal), kg = D.u === 'lb' ? v*LB : v; if (!(kg >= 20 && kg <= 400)) return toast('Enter a goal weight.', 'err'); patchDoc(`athletes/${S.aid}`, {wgoal: kg}); closeDlg(); toast('Goal saved'); },
+  goalclear(){ patchDoc(`athletes/${S.aid}`, {wgoal: null}); closeDlg(); toast('Goal removed'); },
   droundon(){ S.dlg.roundOn = !S.dlg.roundOn; pref.set('roundOn.'+S.dlg.u, S.dlg.roundOn); renderDlg(); },
   dlgbest(){ S.dlg.max = String(f1(wRaw(bestE1(S.sheet.ex), S.dlg.u))); renderDlg(); },
   dlguse(){ const D = S.dlg, v = setCalcResult(); if (!(v > 0)) return toast('Enter a max weight and a percentage.', 'err'); S.draft.w = String(Math.round(v*100)/100); S.editIdx = null; closeDlg(); toast(`Weight set to ${f1(v)} ${wUnit(D.u)}`); },
@@ -1370,7 +1503,7 @@ function cleanDoc(p, v){
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   if (/^athletes\/a[a-z0-9]{1,30}$/.test(p)) {
     const name = str(v.name, 30).trim(); if (!name) return null;
-    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, scores:v.scores === true};
+    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, scores:v.scores === true, wgoal:isNum(v.wgoal,10,400) ? v.wgoal : null};
   }
   const mm = p.match(/^athletes\/a[a-z0-9]{1,30}\/months\/(\d{4}-\d{2})$/);
   if (mm) {
@@ -1599,6 +1732,7 @@ document.addEventListener('change', ev => {
   const el = ev.target, k = el.dataset.ch; if (!k) return;
   if (k === 'date' && el.value) { S.date = el.value; render(); }
   else if (k === 'wnote') { const day = cloneDay(S.aid, S.date); if ((day.note||'') !== el.value) { day.note = el.value.slice(0,600); saveDay(S.aid, S.date, day); } }
+  else if (k === 'bwdate' && S.dlg && el.value) { S.dlg.date = el.value; const at = bodyList(S.aid).find(e => e.d === el.value); if (at) S.dlg.bw = String(wRaw(at.kg, S.dlg.u)); renderDlg(); }
   else if (k === 'aname') { const v = el.value.trim(); if (v) patchDoc(`athletes/${el.dataset.v}`, {name:v.slice(0,30)}); }
   else if (k === 'csv' && el.files && el.files[0]) runImport(el.files[0]);
   else if (k === 'bkmerge' && el.files && el.files[0]) loadBackup(el.files[0], 'merge');
