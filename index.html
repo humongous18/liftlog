@@ -120,6 +120,10 @@ h3{font-size:15px;font-weight:600;color:var(--mute)}
 .wd .r{width:8px;height:8px;border-radius:50%;background:var(--c,var(--tile2))}
 .wd .l{font-size:13px;color:var(--dim);font-weight:500}
 .wd.today .l{color:var(--fg)}
+.wd.future .col{opacity:.45}
+.wkgoal{font-size:15px;color:var(--mute)}
+.wkgoal b{font-family:var(--f-num);font-size:24px;font-weight:700;color:var(--fg);margin-right:1px}
+.figs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 
 /* buttons & inputs */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:50px;padding:0 18px;border-radius:var(--r-btn);background:var(--tile2);font-weight:600;font-size:16px;color:var(--fg)}
@@ -685,21 +689,20 @@ const SCALE5 = ['', '#ff3b4e', '#ff8a3d', '#ffde00', '#9be15d', '#16ec06'];
 const recHex = v => v >= 67 ? HEX.green : v >= 34 ? HEX.yellow : HEX.red;
 function vTodayPlain(){
   const a = A(), I = ix(S.aid), t = today(), u = unit();
-  const ws = weekStart(t), wk = I.dates.filter(d => d >= ws && d <= t), goal = a.goal || 4;
+  // "This week" runs Sunday to Saturday here, like the calendar.
+  const ws = addDays(t, -parseISO(t).getDay()), week = [0,1,2,3,4,5,6].map(i => addDays(ws, i));
+  const wk = I.dates.filter(d => d >= ws && d <= t), goal = a.goal || 4;
   const wSets = wk.reduce((n,d) => n + I.dayStats[d].sets, 0), wVol = wk.reduce((n,d) => n + I.dayStats[d].vol, 0), prWeek = I.prs.filter(p => p.date >= ws).length;
   const day = getDay(S.aid, t), entries = day ? day.entries : [], nSets = entries.reduce((n,e) => n + (Array.isArray(e.sets) ? e.sets.length : 0), 0);
-  const last7 = []; for (let i=6; i>=0; i--) last7.push(addDays(t,-i));
-  const maxS = Math.max(1, ...last7.map(d => I.dayStats[d] ? I.dayStats[d].sets : 0));
-  const strip = last7.map((d,i) => { const n = I.dayStats[d] ? I.dayStats[d].sets : 0; return `<button class="wd ${i===6?'today':''}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}, ${n} sets"><span class="s">${n || '–'}</span><span class="col"><i style="height:${n/maxS*100}%"></i></span><span class="l">${parseISO(d).toLocaleDateString(undefined,{weekday:'narrow'})}</span></button>`; }).join('');
+  const maxS = Math.max(1, ...week.map(d => I.dayStats[d] ? I.dayStats[d].sets : 0));
+  const strip = week.map(d => { const n = I.dayStats[d] ? I.dayStats[d].sets : 0, future = d > t; return `<button class="wd ${d===t?'today':''} ${future?'future':''}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}, ${n} sets"><span class="s">${future ? '' : n || '–'}</span><span class="col"><i style="height:${n/maxS*100}%"></i></span><span class="l">${parseISO(d).toLocaleDateString(undefined,{weekday:'narrow'})}</span></button>`; }).join('');
   const prs = I.prs.slice(-5).reverse();
   return `<div class="wrap">${banners()}${topbar('Today', parseISO(t).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}))}
-    <h2 style="margin-bottom:10px">This week</h2>
-    <div class="figs" style="margin-bottom:18px"><div class="fig"><b>${wk.length}<small>/${goal}</small></b><span>workouts</span></div><div class="fig"><b>${wSets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(wVol,u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prWeek}</b><span>records</span></div></div>
-    <button class="btn primary wide" data-act="gotoToday">${nSets ? `Continue workout · ${nSets} sets` : 'Start workout'}</button>
-    <div class="grid two" style="margin-top:16px">
-      <section class="tile"><h2>Last 7 days</h2><div class="week">${strip}</div><p class="muted small">Bars show sets per day.</p></section>
-      <section class="tile"><h2>Recent records</h2>${prs.length ? `<div class="list">${prs.map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">Beat a previous best and it shows up here.</p>'}</section>
-    </div></div>`;
+    <section class="tile"><div class="tile-h"><h2>This week</h2><span class="wkgoal"><b>${wk.length}</b>/${goal} workouts</span></div><div class="week">${strip}</div><p class="muted small">Bars show sets per day.</p></section>
+    <button class="btn primary wide" style="margin-top:14px" data-act="gotoToday">${nSets ? `Continue workout · ${nSets} sets` : 'Start workout'}</button>
+    <div class="figs three" style="margin-top:18px"><div class="fig"><b>${wSets}</b><span>sets</span></div><div class="fig"><b>${fmtVol(wVol,u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prWeek}</b><span>records</span></div></div>
+    <section class="tile" style="margin-top:18px"><h2>Recent records</h2>${prs.length ? `<div class="list">${prs.map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">Beat a previous best and it shows up here.</p>'}</section>
+  </div>`;
 }
 function vToday(){
   if (!scoresOn()) return vTodayPlain();
@@ -918,11 +921,11 @@ function vMore(){
   </div>`;
 }
 function notifyHTML(){
-  if (!('Notification' in window)) return isIOS() && !standalone() ? '<p class="muted">Add Liftlog to your home screen first, then you can turn on alerts here.</p>' : '<p class="muted">This browser can\'t show notifications. The timer still beeps while Liftlog is open.</p>';
+  if (!('Notification' in window)) return isIOS() && !standalone() ? '<p class="muted">Add Liftlog to your home screen first, then you can turn on alerts here.</p>' : '<p class="muted">This browser can\'t show notifications. The timer still buzzes while Liftlog is open.</p>';
   const ios = isIOS() ? ' On iPhone, iOS pauses web apps in the background, so the alert shows when you come back to Liftlog rather than on the lock screen.' : '';
-  if (Notification.permission === 'granted') return `<p class="muted"><b>On.</b> When a rest ends while Liftlog is in the background, you get a notification.${ios}</p>`;
+  if (Notification.permission === 'granted') return `<p class="muted"><b>On.</b> While you're out of Liftlog, a notification counts down your rest, then buzzes twice when it's over.${ios}</p><p class="muted small">If it also plays a sound, open your phone's settings for Liftlog's notifications and turn the sound off; the vibration stays.</p>`;
   if (Notification.permission === 'denied') return `<p class="muted"><b>Blocked.</b> Allow notifications for Liftlog in your phone's settings to get rest alerts.</p>`;
-  return `<p class="muted">Get a notification when your rest is over and Liftlog isn't on screen.${ios}</p><button class="btn" data-act="notify">Allow notifications</button>`;
+  return `<p class="muted">See your rest count down in a notification while you're out of Liftlog, and get two buzzes when it's over.${ios}</p><button class="btn" data-act="notify">Allow notifications</button>`;
 }
 const VIEWS = {today:vToday, log:vLog, calendar:vCal, trends:vTrends, more:vMore};
 
@@ -1255,15 +1258,14 @@ async function loadBackup(file, mode){
 }
 
 /* ================= timer ================= */
-let AC = null;
-document.addEventListener('pointerdown', () => { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } else if (AC.state === 'suspended') AC.resume().catch(() => {}); });
-function beep(){ if (!AC) return; try { [0, .28, .56].forEach(o => { const os = AC.createOscillator(), g = AC.createGain(); os.frequency.value = 880; os.connect(g); g.connect(AC.destination); const t0 = AC.currentTime + o; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.3, t0+.02); g.gain.exponentialRampToValueAtTime(0.0001, t0+.2); os.start(t0); os.stop(t0+.22); }); } catch {} }
+const BUZZ = [500, 250, 500]; // two medium vibrations
+function buzz(){ try { navigator.vibrate && navigator.vibrate(BUZZ); } catch {} }
 // The rest timer is kept as an end time (not a countdown), so it stays right after the phone sleeps or the app is closed and reopened.
 let restT = null;
 const saveTimer = () => pref.set('timer', S.timer);
 function armRest(){ clearTimeout(restT); if (S.timer && !S.timer.done) restT = setTimeout(tick, Math.max(0, S.timer.end - Date.now()) + 30); }
 function startRest(sec, exName){ const s = sec ?? (A() ? (A().rest ?? 90) : 90); if (!s) return; S.timer = {end:Date.now() + s*1000, total:s*1000, done:false, ex:exName || null}; saveTimer(); armRest(); askNotify(false); tick(); }
-function stopRest(){ S.timer = null; saveTimer(); clearTimeout(restT); tick(); }
+function stopRest(){ S.timer = null; saveTimer(); clearTimeout(restT); stopBgLoop(); clearRestNote(); tick(); }
 const restState = () => !S.timer ? 'idle' : S.timer.done ? 'done' : 'run';
 function restInner(){
   if (!S.timer) { const r = (A() && A().rest) || 90; return `<div class="rc-row"><div><div class="rc-lbl">Rest timer</div><div class="rc-time">${fmtDur(r)}</div></div><button class="btn sm" data-act="rest">${IC.timer} Start</button></div>`; }
@@ -1271,13 +1273,28 @@ function restInner(){
   const left = Math.max(0, S.timer.end - Date.now());
   return `<div class="rc-row"><div><div class="rc-lbl">Resting</div><div class="rc-time" id="rc-left">${fmtDur(Math.ceil(left/1000))}</div></div><div class="row" style="gap:6px"><button class="btn sm" data-act="tadd" data-v="-15" aria-label="Subtract 15 seconds">−15</button><button class="btn sm" data-act="tadd" data-v="15" aria-label="Add 15 seconds">+15</button><button class="btn sm" data-act="tstop">Skip</button></div></div><div class="rc-bar"><i id="rc-bar" style="width:${(clamp(left/S.timer.total,0,1)*100).toFixed(1)}%"></i></div>`;
 }
-async function notifyRest(){
+// While Liftlog is in the background, one notification (same tag) is rewritten every second so it counts down,
+// silently. When the rest ends it is replaced by "Rest over", which vibrates. Web pages can't vibrate while hidden,
+// so that notification carries the buzz.
+const canNotify = () => 'Notification' in window && Notification.permission === 'granted';
+async function restReg(){ try { return navigator.serviceWorker ? await navigator.serviceWorker.getRegistration() : null; } catch { return null; } }
+async function showRestNote(final){
+  if (!canNotify()) return;
+  const reg = await restReg(); if (!reg) return;
+  const ex = S.timer && S.timer.ex, base = {tag:'liftlog-rest', icon:'icons/icon-192.png', badge:'icons/icon-192.png'};
   try {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    const opts = {body: S.timer && S.timer.ex ? `Time for your next set of ${S.timer.ex}.` : 'Time for your next set.', tag:'liftlog-rest', renotify:true, icon:'icons/icon-192.png', badge:'icons/icon-192.png', vibrate:[200,100,200]};
-    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
-    if (reg) await reg.showNotification('Rest over', opts); else new Notification('Rest over', opts);
+    if (final) await reg.showNotification('Rest over', {...base, body: ex ? `Time for your next set of ${ex}.` : 'Time for your next set.', renotify:true, silent:false, vibrate:BUZZ});
+    else if (S.timer && !S.timer.done) await reg.showNotification(`Resting · ${fmtDur(Math.ceil(Math.max(0, S.timer.end - Date.now())/1000))}`, {...base, body: ex ? `Next: ${ex}` : 'Rest timer', renotify:false, silent:true});
   } catch {}
+}
+async function clearRestNote(){ const reg = await restReg(); if (!reg || !reg.getNotifications) return; try { (await reg.getNotifications({tag:'liftlog-rest'})).forEach(n => n.close()); } catch {} }
+let bgLoop = null;
+function stopBgLoop(){ clearInterval(bgLoop); bgLoop = null; }
+function startBgLoop(){
+  stopBgLoop();
+  if (!canNotify() || !S.timer || S.timer.done) return;
+  showRestNote(false);
+  bgLoop = setInterval(() => { if (!document.hidden || !S.timer || S.timer.done) { stopBgLoop(); return; } showRestNote(false); }, 1000);
 }
 function askNotify(fromButton){
   try {
@@ -1289,7 +1306,7 @@ function askNotify(fromButton){
 }
 function tick(){
   const el = $('#timer'), now = Date.now();
-  if (S.timer && !S.timer.done && S.timer.end - now <= 0) { S.timer.done = true; S.timer.doneAt = now; saveTimer(); beep(); try { navigator.vibrate && navigator.vibrate([200,100,200]); } catch {} if (document.hidden) notifyRest(); }
+  if (S.timer && !S.timer.done && S.timer.end - now <= 0) { S.timer.done = true; S.timer.doneAt = now; saveTimer(); if (document.hidden) { stopBgLoop(); showRestNote(true); } else buzz(); }
   if (S.timer && S.timer.done && !document.hidden && now - S.timer.doneAt > 8000) { S.timer = null; saveTimer(); }
   const rc = $('#restcard');
   if (rc) {
@@ -1313,7 +1330,8 @@ function releaseAwake(){ try { wake && wake.release(); } catch {} wake = null; }
 let lastToday = today();
 function checkRollover(){ const t = today(); if (t === lastToday) return; const prev = lastToday; lastToday = t; if (S.date === prev) S.date = t; if (S.calMonth === prev.slice(0,7)) S.calMonth = t.slice(0,7); if (S.ready) render(); }
 setInterval(checkRollover, 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkRollover(); if (S.timer && S.timer.done) { S.timer.doneAt = Date.now(); saveTimer(); } tick(); if (S.sheet && S.sheet.kind === 'ex') keepAwake(); if (S.ready && S.date < today() && S.view === 'today') render(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { if (S.timer && !S.timer.done) startBgLoop(); return; }
+  if (document.visibilityState === 'visible') { stopBgLoop(); clearRestNote(); checkRollover(); if (S.timer && S.timer.done) { S.timer.doneAt = Date.now(); saveTimer(); } tick(); if (S.sheet && S.sheet.kind === 'ex') keepAwake(); if (S.ready && S.date < today() && S.view === 'today') render(); } });
 
 /* ================= toast ================= */
 let toastT = null;
