@@ -276,6 +276,13 @@ textarea.txt{min-height:80px;resize:vertical}
 .dbox .chip.on{background:var(--fg)}
 .dout{text-align:center;padding:12px;border-radius:14px;background:var(--bg)}
 .dout .big{font-size:46px}
+.roundrow{display:flex;align-items:center;gap:10px}
+.roundrow .txt{width:90px;flex:none;text-align:center;font-family:var(--f-num);font-size:20px;font-weight:600;background:var(--tile2)}
+.roundrow .txt:disabled{opacity:.4}
+.cbx{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:500;flex:1;min-height:44px;text-align:left}
+.cbx .box{width:24px;height:24px;border-radius:6px;border:2px solid var(--mute);display:grid;place-items:center;flex:none}
+.cbx[aria-checked="true"] .box{background:var(--link);border-color:var(--link);color:#050708}
+.cbx .box svg{width:16px;height:16px}
 .dbtns{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px}
 .rmt{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 .rmt td{padding:6px 4px;border-bottom:1px solid var(--hair);font-family:var(--f-num);font-size:17px}
@@ -323,7 +330,7 @@ textarea.txt{min-height:80px;resize:vertical}
 .prose b{color:var(--fg);font-weight:600}
 
 /* timer & toast */
-#timer{position:fixed;z-index:55;left:50%;transform:translateX(-50%);bottom:calc(78px + env(safe-area-inset-bottom,0px));
+#timer{position:fixed;z-index:55;left:50%;transform:translateX(-50%);bottom:calc(var(--navh,64px) + 14px);
   display:flex;align-items:center;gap:8px;padding:6px 6px 6px 8px;border-radius:999px;background:var(--tile2);box-shadow:0 8px 30px rgba(0,0,0,.7)}
 #timer svg.tr{width:42px;height:42px}
 #timer .tt{display:flex;flex-direction:column;line-height:1.05;min-width:62px}
@@ -332,7 +339,8 @@ textarea.txt{min-height:80px;resize:vertical}
 #timer button{height:40px;min-width:44px;padding:0 10px;border-radius:999px;background:var(--hair);font-family:var(--f-num);font-weight:700;font-size:16px;display:grid;place-items:center}
 #timer button svg{width:18px;height:18px}
 #timer.done .tt b{color:var(--green)}
-@media (min-width:900px){#timer{bottom:24px;left:auto;right:24px;transform:none}}
+body.oncal #timer{bottom:calc(var(--navh,64px) + 72px)}
+@media (min-width:900px){#timer{bottom:24px;left:auto;right:24px;transform:none}body.oncal #timer{bottom:96px}}
 #toast{position:fixed;z-index:60;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);
   padding:12px 16px;border-radius:14px;background:var(--fg);color:var(--bg);font-weight:600;font-size:15px;box-shadow:0 8px 30px rgba(0,0,0,.6);display:flex;gap:8px;align-items:center}
 #toast.pr{background:var(--yellow)}
@@ -404,6 +412,7 @@ const IC = {
   trophy:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v3H8v-3h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3zm0 4H6v1a2 2 0 0 0 1 1.7V7zm10 0v2.7A2 2 0 0 0 18 8V7h-1z"/></svg>',
   timer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>',
   copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
   list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>'
 };
@@ -453,6 +462,7 @@ const DOCS = {};
 
 function deepMerge(a, b){
   const out = (a && typeof a==='object' && !Array.isArray(a)) ? {...a} : {};
+  if (!b || typeof b !== 'object') return out;
   for (const k of Object.keys(b)) {
     const v = b[k];
     if (v && typeof v==='object' && !Array.isArray(v) && out[k] && typeof out[k]==='object' && !Array.isArray(out[k])) out[k] = deepMerge(out[k], v);
@@ -508,11 +518,11 @@ function exMeta(id){ const c = S.custom[id]; if (c) return {id, name:c.name, cat
 function allEx(){ const list = Object.values(BUILTIN).filter(b => !S.custom[b.id]); for (const id of Object.keys(S.custom)) list.push(exMeta(id)); return list.sort((a,b) => a.name.localeCompare(b.name)); }
 const monthPath = (aid, ym) => `athletes/${aid}/months/${ym}`;
 function getDay(aid, date){ const m = DOCS[monthPath(aid, date.slice(0,7))]; const d = m && m.days && m.days[date]; return d && Array.isArray(d.entries) ? d : null; }
-function cloneDay(aid, date){ const d = getDay(aid, date); const c = d ? JSON.parse(JSON.stringify(d)) : {}; return {entries:c.entries||[], note:c.note||'', rpe:c.rpe||null, t0:c.t0||null, t1:c.t1||null}; }
+function cloneDay(aid, date){ const d = getDay(aid, date); const c = d ? JSON.parse(JSON.stringify(d)) : {}; (c.entries || []).forEach(e => { e.sets = Array.isArray(e.sets) ? e.sets.filter(x => x && typeof x === 'object') : []; }); return {entries:c.entries||[], note:c.note||'', rpe:c.rpe||null, t0:c.t0||null, t1:c.t1||null}; }
 function saveDay(aid, date, day){ const empty = !day || (!day.entries.length && !day.note && !day.rpe); return patchDoc(monthPath(aid, date.slice(0,7)), {ym:date.slice(0,7), days:{[date]: empty ? null : day}}); }
 function metric(type, s){ if (type==='wr') return s.w > 0 ? e1rm(s.w, s.r) : (s.r||0)*0.001; if (type==='r') return s.r || 0; if (type==='t') return s.t || 0; return s.d > 0 ? s.d : (s.t||0)/60000; }
 function fmtSet(s, type, u){
-  if (type==='wr') return s.w > 0 ? `${fmtW(s.w,u)} ${wUnit(u)} × ${s.r}` : `Bodyweight × ${s.r}`;
+  if (type==='wr') { if (s.r == null) return fmtSet(s, s.d ? 'dt' : 't', u); return s.w > 0 ? `${fmtW(s.w,u)} ${wUnit(u)} × ${s.r}` : `Bodyweight × ${s.r}`; }
   if (type==='r') return `${s.r} reps`;
   if (type==='t') return fmtDur(s.t);
   return [s.d ? `${fmtNum(dRaw(s.d,u),2)} ${distU(u)}` : '', s.t ? fmtDur(s.t) : ''].filter(Boolean).join(' in ');
@@ -522,11 +532,11 @@ function groupSets(sets, type, u, prIdx){
   const trophy = `<span class="pr" aria-label="Personal record">${IC.trophy}</span>`;
   if (type !== 'wr') return sets.map((s,i) => `<span class="sg">${esc(fmtSetShort(s,type,u))}${i===prIdx ? trophy : ''}</span>`).join('');
   const groups = [];
-  sets.forEach((s,i) => { const g = groups[groups.length-1]; const w = wRaw(s.w||0,u); if (g && g.w === w) { g.reps.push(s.r); if (i===prIdx) g.pr = true; } else groups.push({w, reps:[s.r], pr:i===prIdx}); });
+  sets.forEach((s,i) => { const g = groups[groups.length-1]; const w = wRaw(s.w||0,u); const rep = s.r != null ? s.r : s.t ? fmtDur(s.t) : '–'; if (g && g.w === w) { g.reps.push(rep); if (i===prIdx) g.pr = true; } else groups.push({w, reps:[rep], pr:i===prIdx}); });
   const wu = u === 'lb' ? 'lb' : 'kg';
   return groups.map(g => `<span class="sg">${g.w > 0 ? `${fmtNum(g.w,2)} ${wu}` : 'BW'} <span class="x">×</span> ${g.reps.join(', ')}${g.pr ? trophy : ''}</span>`).join('');
 }
-function fmtSetShort(s, type, u){ return type==='wr' ? (s.w > 0 ? `${fmtW(s.w,u)} × ${s.r}` : `BW × ${s.r}`) : fmtSet(s, type, u); }
+function fmtSetShort(s, type, u){ return type==='wr' && s.r == null ? fmtSet(s, type, u) : type==='wr' ? (s.w > 0 ? `${fmtW(s.w,u)} × ${s.r}` : `BW × ${s.r}`) : fmtSet(s, type, u); }
 
 /* ================= analytics ================= */
 const IXC = {};
@@ -545,7 +555,7 @@ function buildIndex(aid){
   for (const dt of dates) {
     const d = days[dt]; let load = 0, sets = 0, reps = 0, vol = 0; const cats = {}, catLoad = {};
     for (const en of d.entries) {
-      const sl = Array.isArray(en.sets) ? en.sets : []; if (!sl.length) continue;
+      const sl = Array.isArray(en.sets) ? en.sets.filter(x => x && typeof x === 'object') : []; if (!sl.length) continue;
       const m = exMeta(en.ex); const vals = sl.map(s => metric(m.type, s));
       const dayMax = Math.max(...vals), prevBest = best[en.ex] || 0, ref = Math.max(prevBest, dayMax) || 1;
       let eLoad = 0;
@@ -674,6 +684,7 @@ function render(){
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === S.view));
   renderSheet(); drawCharts(); tick();
   setNavH(); renderDlg();
+  document.body.classList.toggle('oncal', S.view === 'calendar');
   if (S.view === 'calendar' && S.calJump && S.ready && athleteIds().length) { S.calJump = false; scrollToMonth(S.calMonth, false); }
 }
 // The calendar's count bar sits directly on top of the tab bar. Its offset is measured from the tab bar's real
@@ -791,7 +802,7 @@ function vLog(){
   return vLogBody(d, I, u, day, ds, st, entries, list, rpe);
 }
 function entryHTML(e, I, d, u, act){
-    const m = exMeta(e.ex), h = (I.byEx[e.ex]||[]).find(x => x.date === d), sets = Array.isArray(e.sets) ? e.sets : [];
+    const m = exMeta(e.ex), h = (I.byEx[e.ex]||[]).find(x => x.date === d), sets = Array.isArray(e.sets) ? e.sets.filter(x => x && typeof x === 'object') : [];
     const notes = sets.map(s => s.note).filter(Boolean);
     return `<button class="entry" data-act="${act}" data-v="${esc(e.ex)}" aria-label="${esc(m.name)}, ${sets.length} sets"><div class="entry-h"><b>${esc(m.name)}</b><span>${sets.length ? `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}` : CATS[m.cat].name}</span></div>
       ${sets.length ? `<div class="sline">${groupSets(sets, m.type, u, h ? h.prIdx : -1)}</div>${notes.length ? `<div class="enote">${esc(notes.join(' · '))}</div>` : ''}` : `<p class="muted small">No sets yet. Tap to log.</p>`}</button>`;
@@ -981,7 +992,7 @@ function shEx(){
 }
 function stepper(f, label, mode){ return `<div class="field"><label for="in-${f}">${label}</label><div class="stepper"><button data-act="step" data-f="${f}" data-v="-1" aria-label="Decrease">−</button><input id="in-${f}" data-in="draft" data-f="${f}" inputmode="${mode}" value="${esc(S.draft[f]||'')}" autocomplete="off" enterkeyhint="done"><button data-act="step" data-f="${f}" data-v="1" aria-label="Increase">+</button></div></div>`; }
 function trackHTML(ex, m, u){
-  const day = getDay(S.aid, S.date), en = day && day.entries.find(e => e.ex === ex), sets = (en && en.sets) || [];
+  const day = getDay(S.aid, S.date), en = day && day.entries.find(e => e.ex === ex), sets = en && Array.isArray(en.sets) ? en.sets.filter(x => x && typeof x === 'object') : [];
   const h = (ix(S.aid).byEx[ex]||[]).find(x => x.date === S.date), prIdx = h ? h.prIdx : -1;
   const fields = m.type==='wr' ? stepper('w', `Weight (${wUnit(u)})`, 'decimal') + stepper('r','Reps','numeric')
     : m.type==='r' ? stepper('r','Reps','numeric')
@@ -1003,7 +1014,7 @@ const fmtW1 = (kg,u) => { const v = wRaw(kg,u); return Number.isInteger(Math.rou
 function setCells(s, type, u){
   const unitCell = (v, unit) => `${v}<i>${unit}</i>`;
   let a = '', b = '';
-  if (type === 'wr') { a = s.w > 0 ? unitCell(fmtW1(s.w,u), wUnit(u)) : unitCell('BW', ''); b = unitCell(s.r, s.r === 1 ? 'rep' : 'reps'); }
+  if (type === 'wr') { a = s.w > 0 ? unitCell(fmtW1(s.w,u), wUnit(u)) : unitCell('BW', ''); b = s.r != null ? unitCell(s.r, s.r === 1 ? 'rep' : 'reps') : s.t ? fmtDur(s.t) : s.d ? unitCell(fmtNum(dRaw(s.d,u),2), distU(u)) : '–'; }
   else if (type === 'r') b = unitCell(s.r, s.r === 1 ? 'rep' : 'reps');
   else if (type === 't') b = fmtDur(s.t);
   else { a = s.d ? unitCell(fmtNum(dRaw(s.d,u),2), distU(u)) : ''; b = s.t ? fmtDur(s.t) : ''; }
@@ -1102,20 +1113,20 @@ function shRoutines(){
 }
 /* ---------- calculators (opened from the exercise menu) ---------- */
 const PLATE_SETS = {lb:[45,35,25,10,5,2.5], kg:[25,20,15,10,5,2.5,1.25]};
-const PLATE_COLORS = {lb:{45:'#0093e7',35:'#ffde00',25:'#16c60c',10:'#e8edef',5:'#ff3b4e',2.5:'#9aa7b0'}, kg:{25:'#ff3b4e',20:'#0093e7',15:'#ffde00',10:'#16c60c',5:'#e8edef',2.5:'#ff3b4e',1.25:'#9aa7b0'}};
+const PLATE_COLORS = {lb:{45:'#0093e7',35:'#ffde00',25:'#16c60c',10:'#ff3b4e',5:'#9aa7b0',2.5:'#9aa7b0'}, kg:{25:'#ff3b4e',20:'#0093e7',15:'#ffde00',10:'#16c60c',5:'#e8edef',2.5:'#ff3b4e',1.25:'#9aa7b0'}};
 const BAR_OPTS = {lb:[45,35,15,0], kg:[20,15,10,0]};
-const ROUND_OPTS = {lb:[0,1,2.5,5], kg:[0,0.5,1,2.5]};
+const ROUND_DEFAULT = {lb:5, kg:2.5};
 const plateCfg = u => ({bar: pref.get('bar.'+u, u==='lb' ? 45 : 20), plates: pref.get('plates.'+u, PLATE_SETS[u])});
 function bestE1(ex){ const h = ix(S.aid).byEx[ex] || []; let b = 0; h.forEach(x => x.sets.forEach(st => { const e = e1rm(st.w, st.r); if (e > b) b = e; })); return b; }
 function openDlg(kind){
   const u = unit(), ex = S.sheet && S.sheet.ex, w = num(S.draft.w) || 0, r = parseInt(S.draft.r,10) || 5;
   const best = ex ? wRaw(bestE1(ex), u) : 0;
   S.menu = false;
-  S.dlg = {kind, u, w:String(w || ''), r:String(r), max:String(best || w || ''), pct:'85', round: pref.get('round.'+u, u==='lb' ? 5 : 2.5), pw:String(w || (u==='lb' ? 135 : 60)), settings:false};
+  S.dlg = {kind, u, w:String(w || ''), r:String(r), max:String(w || best || ''), pct:'85', roundOn: pref.get('roundOn.'+u, true), roundTo: String(pref.get('roundTo.'+u, ROUND_DEFAULT[u])), pw:String(w || (u==='lb' ? 135 : 60)), settings:false};
   try { history.pushState({dlg:true}, ''); } catch {}
   render();
 }
-function closeDlg(){ if (history.state && history.state.dlg) { try { history.back(); return; } catch {} } S.dlg = null; render(); }
+function closeDlg(){ if (backPending) return; if (history.state && history.state.dlg) { popOurs(1); return; } S.dlg = null; render(); }
 const f1 = v => (Math.round(v*10)/10).toFixed(1);
 const fP = v => Number.isInteger(v*10) ? v.toFixed(1) : String(v); // plate sizes like 1.25 keep their second decimal
 function dstepper(f, label, mode){ return `<div class="field"><label for="dl-${f}">${label}</label><div class="stepper"><button data-act="dstep" data-f="${f}" data-v="-1" aria-label="Decrease">−</button><input id="dl-${f}" data-in="dlg" data-f="${f}" inputmode="${mode}" value="${esc(S.dlg[f])}" autocomplete="off"><button data-act="dstep" data-f="${f}" data-v="1" aria-label="Increase">+</button></div></div>`; }
@@ -1128,8 +1139,7 @@ function dlgOut(){
       <table class="rmt"><tbody>${[1,2,3,4,5,6,8,10,12].map(n => { const wt = n === 1 ? one : one/(1+n/30); return `<tr><td>${n} ${n===1?'rep':'reps'}</td><td>${f1(wt)} ${U}</td><td>${Math.round(wt/one*100)}%</td></tr>`; }).join('')}</tbody></table>`;
   }
   if (D.kind === 'set') {
-    const max = num(D.max) || 0, pct = num(D.pct) || 0; let v = max*pct/100;
-    if (D.round > 0) v = Math.round(v/D.round)*D.round;
+    const max = num(D.max) || 0, pct = num(D.pct) || 0, v = setCalcResult();
     return `<div class="dout"><div class="big">${max > 0 && pct > 0 ? f1(v) : '–'}<small> ${U}</small></div></div>`;
   }
   const cfg = plateCfg(u), total = num(D.pw) || 0, side = (total - cfg.bar)/2;
@@ -1143,21 +1153,23 @@ function dlgOut(){
   let x = 46, rects = '';
   plates.forEach(pl => { const h = 36 + 104*(pl/maxP), wdt = pl >= maxP*0.5 ? 16 : pl >= maxP*0.2 ? 12 : 9; rects += `<rect x="${x}" y="${(150-h)/2}" width="${wdt}" height="${h}" rx="3" fill="${PLATE_COLORS[u][pl] || '#9aa7b0'}"/>`; x += wdt + 3; });
   const svgW = x + 24;
-  const svg = `<svg class="plates" width="${svgW}" height="150" viewBox="0 0 ${svgW} 150" role="img" aria-label="Plates on one side"><rect x="0" y="69" width="${svgW}" height="12" rx="3" fill="#5c676e"/><rect x="34" y="52" width="10" height="46" rx="2" fill="#7d8a93"/>${rects}</svg>`;
+  const svg = `<svg class="plates" width="${svgW}" height="150" viewBox="0 0 ${svgW} 150" role="img" aria-label="Plates on one side"><rect x="0" y="69" width="${svgW}" height="12" rx="3" fill="#262e33"/><rect x="34" y="52" width="10" height="46" rx="2" fill="#323b41"/>${rects}</svg>`;
   return `<div class="dout"><div>${f1(cfg.bar)} ${U} bar + <b>${f1(side - left)}</b> ${U} each side</div></div>
     ${plates.length ? svg : ''}
     <p style="text-align:center;font-family:var(--f-num);font-size:22px;font-weight:600">${plates.length ? plates.map(pl => `${fP(pl)}<span class="muted" style="font-size:15px"> ${U}</span>`).join(', ') : 'Just the bar'}</p>
     ${left > 0 ? `<p class="muted small" style="text-align:center">${f1(left*2)} ${U} can't be made with your plates. Closest load is ${f1(total - left*2)} ${U}.</p>` : ''}`;
 }
+// Set calculator result: weight × percentage, rounded to the nearest step when rounding is on.
+function setCalcResult(){ const D = S.dlg, max = num(D.max) || 0, pct = num(D.pct) || 0, step = num(D.roundTo); let v = max*pct/100; if (D.roundOn && step > 0) v = Math.round(v/step)*step; return v; }
 function dlgHTML(){
   const D = S.dlg, u = D.u, U = wUnit(u);
   if (D.kind === '1rm') return `<h2 id="dlg-t">1RM Calculator</h2>${dstepper('w', `Weight (${U})`, 'decimal')}${dstepper('r', 'Reps', 'numeric')}<div id="dl-out">${dlgOut()}</div><div class="dbtns"><button class="btn" data-act="dlgclose">Close</button></div>`;
   if (D.kind === 'set') {
     const best = S.sheet && S.sheet.ex ? bestE1(S.sheet.ex) : 0;
-    return `<h2 id="dlg-t">Set Calculator</h2>${dstepper('max', `Max weight (${U})`, 'decimal')}${best ? `<button class="link" data-act="dlgbest" style="text-align:center">Use my best est. 1RM, ${f1(wRaw(best,u))} ${U}</button>` : ''}
-      ${dstepper('pct', 'Percentage (%)', 'decimal')}<div class="chips" style="justify-content:center">${[50,60,65,70,75,80,85,90,95].map(p => `<button class="chip ${num(D.pct)===p?'on':''}" data-act="dpct" data-v="${p}">${p}</button>`).join('')}</div>
+    return `<h2 id="dlg-t">Set Calculator</h2>${dstepper('max', `Weight (${U})`, 'decimal')}${best ? `<button class="link" data-act="dlgbest" style="text-align:center">Use my best est. 1RM, ${f1(wRaw(best,u))} ${U}</button>` : ''}
+      ${dstepper('pct', 'Percentage (%)', 'decimal')}
       <div id="dl-out">${dlgOut()}</div>
-      <div class="field"><span>Round to closest</span><div class="chips">${ROUND_OPTS[u].map(r => `<button class="chip ${D.round===r?'on':''}" data-act="dround" data-v="${r}">${r ? fP(r) + ' ' + U : 'Off'}</button>`).join('')}</div></div>
+      <div class="roundrow"><button class="cbx" role="checkbox" aria-checked="${D.roundOn}" data-act="droundon"><span class="box">${D.roundOn ? IC.check : ''}</span>Round to closest</button><input class="txt" id="dl-roundTo" data-in="dlg" data-f="roundTo" inputmode="decimal" value="${esc(D.roundTo)}" aria-label="Round to closest, in ${U}" ${D.roundOn ? '' : 'disabled'}><span class="muted">${U}</span></div>
       <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="dlguse">Use weight</button></div>`;
   }
   const cfg = plateCfg(u);
@@ -1177,8 +1189,20 @@ const SHEETS = {ex:shEx, add:shAdd, newex:shNewEx, copy:shCopy, routines:shRouti
 /* ================= actions ================= */
 // Opening a sheet adds a history entry so the Android back button closes the sheet instead of leaving the app.
 function openSheet(obj){ if (!S.sheet) { try { history.pushState({sheet:true}, ''); } catch {} } S.sheet = obj; }
-function dropSheet(){ S.menu = false; S.dlg = null; S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); try { if (history.state && history.state.sheet) history.replaceState(null, ''); } catch {} }
-window.addEventListener('popstate', () => { if (S.dlg) { S.dlg = null; render(); return; } if (S.sheet) { S.menu = false; S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); render(); } });
+// Sheets and dialogs each add one history entry. Closing them steps back exactly once (repeat taps are ignored
+// until the browser reports the step), so the back button never skips past the screen underneath.
+let backPending = false;
+const ourDepth = () => { const st = history.state || {}; return st.dlg ? 2 : st.sheet ? 1 : 0; };
+function popOurs(n){ if (backPending || !n) return; backPending = true; try { history.go(-n); } catch { backPending = false; } }
+function clearSheet(){ S.menu = false; S.dlg = null; S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); }
+function dropSheet(){ const n = ourDepth(); clearSheet(); popOurs(n); }
+// Close any sheet and show a view. When the view changes, the sheet's history entry is reused for it.
+function navTo(hash){
+  const n = ourDepth(); clearSheet();
+  if ('#' + hash !== location.hash) { if (n) { try { history.replaceState(null, '', '#' + hash); } catch {} route(); } else location.hash = hash; }
+  else { popOurs(n); render(); window.scrollTo(0,0); }
+}
+window.addEventListener('popstate', () => { backPending = false; if (S.dlg) { S.dlg = null; render(); return; } if (S.sheet) { clearSheet(); render(); } });
 function openEx(ex, tab){ openSheet({kind:'ex', ex, tab:tab||'track'}); S.editIdx = null; S.confirm = null; S.gMetric = null; S.draft = defaultDraft(ex); render(); keepAwake(); }
 function setToDraft(s, u){ if (!s) return {w:'', r:'', d:'', t:'', note:''}; return {w:s.w != null ? String(wRaw(s.w,u)) : '', r:s.r != null ? String(s.r) : '', d:s.d ? String(dRaw(s.d,u)) : '', t:s.t ? fmtDur(s.t) : '', note:''}; }
 function defaultDraft(ex){
@@ -1208,13 +1232,13 @@ const ACT = {
     if (n2) patchDoc(`athletes/a${uid()}`, {name:n2, color:COLORS[1], unit:u, rest:90, goal:4, created:now+1});
   },
   install(){ const e = S.installEvt; if (!e) return; e.prompt(); e.userChoice.finally(() => { S.installEvt = null; render(); }); },
-  gotoToday(){ S.date = today(); dropSheet(); if (location.hash !== '#log') location.hash = 'log'; else { render(); window.scrollTo(0,0); } },
-  goto(el){ S.date = el.dataset.v; dropSheet(); if (location.hash !== '#log') location.hash = 'log'; else render(); window.scrollTo(0,0); },
+  gotoToday(){ S.date = today(); navTo('log'); },
+  goto(el){ S.date = el.dataset.v; navTo('log'); },
   day(el){ S.date = addDays(S.date, +el.dataset.v); render(); },
   cal(el){ const v = +el.dataset.v, secs = calSections(), i = secs.findIndex(x => x.dataset.ym === S.calMonth); const target = !v ? today().slice(0,7) : secs[clamp(i + v, 0, secs.length-1)] && secs[clamp(i + v, 0, secs.length-1)].dataset.ym; if (target) scrollToMonth(target, true); },
   calmore(){ S.calBack = (S.calBack||0) + 24; const keep = S.calMonth; render(); scrollToMonth(keep, false); },
   trange(el){ S.trendRange = el.dataset.v; render(); },
-  close(){ blurActive(); if (history.state && history.state.sheet) { try { history.back(); return; } catch {} } dropSheet(); render(); },
+  close(){ if (backPending) return; blurActive(); const n = ourDepth(); if (n) { popOurs(n); return; } clearSheet(); render(); },
   addex(){ S.addQ = ''; S.addCat = ix(S.aid).dates.length ? 'recent' : 'all'; openSheet({kind:'add'}); render(); },
   addcat(el){ S.addCat = el.dataset.v; S.addQ = ''; render(); },
   pickex(el){ openEx(el.dataset.v); },
@@ -1229,10 +1253,9 @@ const ACT = {
     let v = Math.max(0, Math.round(((num(inp.value) || 0) + dir*inc)*100)/100); if (f === 'pct') v = Math.min(v, 150);
     inp.value = String(v); S.dlg[f] = inp.value; $('#dl-out').innerHTML = dlgOut();
   },
-  dpct(el){ S.dlg.pct = el.dataset.v; renderDlg(); },
-  dround(el){ S.dlg.round = +el.dataset.v; pref.set('round.'+S.dlg.u, S.dlg.round); renderDlg(); },
+  droundon(){ S.dlg.roundOn = !S.dlg.roundOn; pref.set('roundOn.'+S.dlg.u, S.dlg.roundOn); renderDlg(); },
   dlgbest(){ S.dlg.max = String(f1(wRaw(bestE1(S.sheet.ex), S.dlg.u))); renderDlg(); },
-  dlguse(){ const D = S.dlg, max = num(D.max) || 0, pct = num(D.pct) || 0; let v = max*pct/100; if (D.round > 0) v = Math.round(v/D.round)*D.round; if (!(v > 0)) return toast('Enter a max weight and a percentage.', 'err'); S.draft.w = String(Math.round(v*100)/100); S.editIdx = null; closeDlg(); toast(`Weight set to ${f1(v)} ${wUnit(D.u)}`); },
+  dlguse(){ const D = S.dlg, v = setCalcResult(); if (!(v > 0)) return toast('Enter a max weight and a percentage.', 'err'); S.draft.w = String(Math.round(v*100)/100); S.editIdx = null; closeDlg(); toast(`Weight set to ${f1(v)} ${wUnit(D.u)}`); },
   dsettings(){ S.dlg.settings = !S.dlg.settings; renderDlg(); },
   dbar(el){ pref.set('bar.'+S.dlg.u, +el.dataset.v); renderDlg(); },
   dplate(el){ const u = S.dlg.u, pl = +el.dataset.v, cur = plateCfg(u).plates; pref.set('plates.'+u, cur.includes(pl) ? cur.filter(x => x !== pl) : cur.concat(pl)); renderDlg(); },
@@ -1265,6 +1288,7 @@ const ACT = {
     if (!en) { en = {ex, sets:[]}; day.entries.push(en); }
     if (!en.sets) en.sets = [];
     const editing = S.editIdx != null;
+    if (editing && !en.sets[S.editIdx]) { S.editIdx = null; S.draft = defaultDraft(ex); render(); return toast("That set isn't on this day any more. Nothing was changed.", 'err'); }
     if (editing) { en.sets[S.editIdx] = r; S.editIdx = null; }
     else { en.sets.push(r); if (S.date === today()) { const now = Date.now(); if (!day.t0) day.t0 = now; day.t1 = now; } }
     S.draft.note = '';
@@ -1411,13 +1435,15 @@ function restInner(){
 // so that notification carries the buzz.
 const canNotify = () => 'Notification' in window && Notification.permission === 'granted';
 async function restReg(){ try { return navigator.serviceWorker ? await navigator.serviceWorker.getRegistration() : null; } catch { return null; } }
+let noteGen = 0; // bumped whenever Liftlog comes back on screen; countdown updates started before that are dropped
 async function showRestNote(final){
   if (!canNotify()) return;
-  const reg = await restReg(); if (!reg) return;
+  const gen = noteGen, reg = await restReg(); if (!reg) return;
+  if (!final && (gen !== noteGen || !document.hidden)) return;
   const ex = S.timer && S.timer.ex, base = {tag:'liftlog-rest', icon:'icons/icon-192.png', badge:'icons/icon-192.png'};
   try {
     if (final) await reg.showNotification('Rest over', {...base, body: ex ? `Time for your next set of ${ex}.` : 'Time for your next set.', renotify:true, silent:false, vibrate:BUZZ});
-    else if (S.timer && !S.timer.done) await reg.showNotification(`Resting · ${fmtDur(Math.ceil(Math.max(0, S.timer.end - Date.now())/1000))}`, {...base, body: ex ? `Next: ${ex}` : 'Rest timer', renotify:false, silent:true});
+    else if (S.timer && !S.timer.done) { await reg.showNotification(`Resting · ${fmtDur(Math.ceil(Math.max(0, S.timer.end - Date.now())/1000))}`, {...base, body: ex ? `Next: ${ex}` : 'Rest timer', renotify:false, silent:true}); if (gen !== noteGen || !document.hidden) clearRestNote(); }
   } catch {}
 }
 async function clearRestNote(){ const reg = await restReg(); if (!reg || !reg.getNotifications) return; try { (await reg.getNotifications({tag:'liftlog-rest'})).forEach(n => n.close()); } catch {} }
@@ -1439,7 +1465,7 @@ function askNotify(fromButton){
 }
 function tick(){
   const el = $('#timer'), now = Date.now();
-  if (S.timer && !S.timer.done && S.timer.end - now <= 0) { S.timer.done = true; S.timer.doneAt = now; saveTimer(); if (document.hidden) { stopBgLoop(); showRestNote(true); } else buzz(); }
+  if (S.timer && !S.timer.done && S.timer.end - now <= 0) { S.timer.done = true; S.timer.doneAt = now; saveTimer(); if (document.hidden) { stopBgLoop(); showRestNote(true); } else { buzz(); clearRestNote(); } }
   if (S.timer && S.timer.done && !document.hidden && now - S.timer.doneAt > 8000) { S.timer = null; saveTimer(); }
   const rc = $('#restcard');
   if (rc) {
@@ -1461,10 +1487,10 @@ async function keepAwake(){ try { if (!wake && navigator.wakeLock) { wake = awai
 function releaseAwake(){ try { wake && wake.release(); } catch {} wake = null; }
 // If Liftlog stays open past midnight, whatever was showing "today" moves to the new day.
 let lastToday = today();
-function checkRollover(){ const t = today(); if (t === lastToday) return; const prev = lastToday; lastToday = t; if (S.date === prev) S.date = t; if (S.calMonth === prev.slice(0,7)) S.calMonth = t.slice(0,7); if (S.ready) render(); }
+function checkRollover(){ const t = today(); if (t === lastToday) return; const prev = lastToday; lastToday = t; if (S.date === prev) { S.date = t; if (S.sheet && S.sheet.kind === 'ex') { S.editIdx = null; S.confirm = null; S.draft = defaultDraft(S.sheet.ex); } } if (S.calMonth === prev.slice(0,7)) S.calMonth = t.slice(0,7); if (S.ready) render(); }
 setInterval(checkRollover, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { if (S.timer && !S.timer.done) startBgLoop(); return; }
-  if (document.visibilityState === 'visible') { stopBgLoop(); clearRestNote(); checkRollover(); if (S.timer && S.timer.done) { S.timer.doneAt = Date.now(); saveTimer(); } tick(); if (S.sheet && S.sheet.kind === 'ex') keepAwake(); if (S.ready && S.date < today() && S.view === 'today') render(); } });
+  if (document.visibilityState === 'visible') { noteGen++; stopBgLoop(); clearRestNote(); setTimeout(clearRestNote, 400); checkRollover(); if (S.timer && S.timer.done) { S.timer.doneAt = Date.now(); saveTimer(); } tick(); if (S.sheet && S.sheet.kind === 'ex') keepAwake(); if (S.ready && S.date < today() && S.view === 'today') render(); } });
 
 /* ================= toast ================= */
 let toastT = null;
@@ -1561,7 +1587,7 @@ document.addEventListener('keydown', ev => {
 document.addEventListener('input', ev => {
   const el = ev.target;
   if (el.dataset.in === 'draft') S.draft[el.dataset.f] = el.value;
-  else if (el.dataset.in === 'dlg' && S.dlg) { S.dlg[el.dataset.f] = el.value; const o = $('#dl-out'); if (o) o.innerHTML = dlgOut(); }
+  else if (el.dataset.in === 'dlg' && S.dlg) { S.dlg[el.dataset.f] = el.value; if (el.dataset.f === 'roundTo' && num(el.value) > 0) pref.set('roundTo.'+S.dlg.u, num(el.value)); const o = $('#dl-out'); if (o) o.innerHTML = dlgOut(); }
   else if (el.dataset.in === 'addq') { S.addQ = el.value; const l = $('#exlist'); if (l) l.innerHTML = exListHTML(); }
 });
 document.addEventListener('change', ev => {
@@ -1574,7 +1600,7 @@ document.addEventListener('change', ev => {
   else if (k === 'bkreplace' && el.files && el.files[0]) loadBackup(el.files[0], 'replace');
   if (el.type === 'file') el.value = '';
 });
-function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; if (S.sheet) dropSheet(); if (S.view === 'calendar') S.calJump = true; render(); if (S.view !== 'calendar') window.scrollTo(0,0); }
+function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; if (S.sheet) clearSheet(); if (S.view === 'calendar') S.calJump = true; render(); if (S.view !== 'calendar') window.scrollTo(0,0); }
 window.addEventListener('hashchange', route);
 let rzT; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(drawCharts, 150); });
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.view === 'more') render(); });
@@ -1586,7 +1612,7 @@ async function init(){
   if (S.storeBlocked) { S.ready = true; render(); return; }
   try { Object.assign(DOCS, await DB.loadAll()); } catch { S.storeBlocked = !!DB.idb; S.storeOk = false; if (S.storeBlocked) { S.ready = true; render(); return; } }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
-  const t = pref.get('timer', null); if (t && t.end && t.total) { S.timer = t; if (t.done) { S.timer = null; saveTimer(); } else armRest(); }
+  const t = pref.get('timer', null); if (t && t.end && t.total) { S.timer = t; if (t.done || t.end < Date.now() - 60000) { S.timer = null; saveTimer(); } else armRest(); }
   S.ready = true; changed();
 }
 init();
