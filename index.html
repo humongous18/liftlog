@@ -300,12 +300,6 @@ textarea.txt{min-height:80px;resize:vertical}
 .bwrow .dt{font-size:15px;color:var(--mute)}
 .bwrow b{font-family:var(--f-num);font-size:22px;font-weight:600}
 .bwrow .ch{text-align:right;font-size:14px;color:var(--mute)}
-.ichip{display:inline-grid;place-items:center;padding:0 10px}
-.ichip svg{width:18px;height:18px}
-.bwlegend{justify-content:flex-start;font-size:13px}
-.bwlegend .lg-raw,.bwlegend .lg-avg{display:inline-block;width:18px;border-radius:2px;background:#4cbaff}
-.bwlegend .lg-raw{height:2px;opacity:.5}
-.bwlegend .lg-avg{height:3px}
 .roundrow{display:flex;align-items:center;gap:10px}
 .roundrow .txt{width:90px;flex:none;text-align:center;font-family:var(--f-num);font-size:20px;font-weight:600;background:var(--tile2)}
 .roundrow .txt:disabled{opacity:.4}
@@ -443,7 +437,6 @@ const IC = {
   timer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>',
   copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
-  sliders:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
   dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
   list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>'
 };
@@ -653,16 +646,10 @@ function weightScale(ys, goal, fit){
   const pad = Math.max(0.6, (hi - lo) * 0.1); lo -= pad; hi += pad;
   return {lo, hi, goalIn: goal != null && goal >= lo && goal <= hi};
 }
-// Rolling average: at each weigh-in, the mean of all weigh-ins in the N days ending that day.
-// Computed over the whole history so the first points of a short range are averaged properly.
-const avgOn = () => pref.get('bwavg', true), avgDays = () => pref.get('bwavgdays', 7);
-function rollAvg(list, days){ return list.map((e, i) => { const from = addDays(e.d, -(days - 1)); let s = 0, n = 0; for (let j = i; j >= 0 && list[j].d >= from; j--) { s += list[j].kg; n++; } return {d:e.d, kg:s/n}; }); }
-function avgPts(list, from, u){ if (!avgOn() || list.length < 2) return null; return rollAvg(list, avgDays()).filter(e => e.d >= from).map(e => ({x:msOf(e.d), y:wRaw(e.kg, u)})); }
 function weightChart(sp, W){
   const H = sp.h, compact = !!sp.compact, L = compact ? 3 : 40, R = compact ? 7 : 12, T = compact ? 8 : 14, B = compact ? 8 : 26, iw = W - L - R, ih = H - T - B;
   const pts = sp.pts; if (!pts.length) return '';
-  const avg = sp.avg && sp.avg.length > 1 ? sp.avg : null;
-  const sc = weightScale(pts.map(p => p.y).concat(avg ? avg.map(p => p.y) : []), sp.goal, sp.fit);
+  const sc = weightScale(pts.map(p => p.y), sp.goal, sp.fit);
   const x0 = sp.x0, x1 = Math.max(sp.x1, x0 + 864e5);
   const X = v => L + (v - x0) / (x1 - x0) * iw, Y = v => T + ih - (v - sc.lo) / (sc.hi - sc.lo) * ih;
   const lbl = (x, y, t, a) => `<text x="${x}" y="${y}" text-anchor="${a}" fill="#a3aeb5" style="font-family:var(--f-num);font-size:12px;font-weight:600">${esc(t)}</text>`;
@@ -672,15 +659,12 @@ function weightChart(sp, W){
     [0, .5, 1].forEach(f => { const v = sc.lo + (sc.hi - sc.lo) * f, yy = Y(v); o += `<line x1="${L}" x2="${W-R}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="#232a2f" stroke-width="1"/>` + lbl(L - 6, (yy + 4).toFixed(1), v.toFixed(dec), 'end'); });
     o += lbl(L, H - 6, xDate(x0), 'start') + lbl(L + iw/2, H - 6, xDate((x0 + x1)/2), 'middle') + lbl(W - R, H - 6, sp.endLabel || xDate(x1), 'end');
   }
-  const pathOf = arr => arr.map((p,i) => `${i?'L':'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
-  const d = pathOf(pts), da = avg ? pathOf(avg) : null, fillSrc = avg || pts, fd = da || d;
+  const d = pts.map((p,i) => `${i?'L':'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
   const gid = 'g' + (++chartN);
-  if (fillSrc.length > 1) o += `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4cbaff" stop-opacity=".24"/><stop offset="1" stop-color="#4cbaff" stop-opacity="0"/></linearGradient></defs><path d="${fd}L${X(fillSrc[fillSrc.length-1].x).toFixed(1)},${T+ih}L${X(fillSrc[0].x).toFixed(1)},${T+ih}Z" fill="url(#${gid})"/>`;
+  if (pts.length > 1) o += `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4cbaff" stop-opacity=".26"/><stop offset="1" stop-color="#4cbaff" stop-opacity="0"/></linearGradient></defs><path d="${d}L${X(pts[pts.length-1].x).toFixed(1)},${T+ih}L${X(pts[0].x).toFixed(1)},${T+ih}Z" fill="url(#${gid})"/>`;
   if (sc.goalIn) { const gy = Y(sp.goal).toFixed(1); o += `<line x1="${L}" x2="${W-R}" y1="${gy}" y2="${gy}" stroke="#16ec06" stroke-width="1.7" stroke-dasharray="7 6"/>`; if (!compact) o += `<text x="${W-R}" y="${(Y(sp.goal) - 7).toFixed(1)}" text-anchor="end" fill="#16ec06" style="font-size:13px;font-weight:600">Goal ${esc(f1w(sp.goal))}</text>`; }
-  // With an average showing, the daily weigh-ins become a thinner, fainter line under the bold average.
-  o += avg ? `<path d="${d}" fill="none" stroke="#4cbaff" stroke-opacity=".5" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path d="${da}" fill="none" stroke="#4cbaff" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>`
-    : `<path d="${d}" fill="none" stroke="#4cbaff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-  if (!compact && pts.length <= 40) pts.forEach(p => { o += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${avg ? 2 : 2.4}" fill="#4cbaff" fill-opacity="${avg ? .6 : 1}"><title>${esc(xDate(p.x))}: ${esc(f1w(p.y))}</title></circle>`; });
+  o += `<path d="${d}" fill="none" stroke="#4cbaff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  if (!compact && pts.length <= 40) pts.forEach(p => { o += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="2.4" fill="#4cbaff"><title>${esc(xDate(p.x))}: ${esc(f1w(p.y))}</title></circle>`; });
   const lp = pts[pts.length-1];
   return o + `<circle cx="${X(lp.x).toFixed(1)}" cy="${Y(lp.y).toFixed(1)}" r="${compact ? 4.5 : 5}" fill="#050708" stroke="#4cbaff" stroke-width="2.5"/></svg>`;
 }
@@ -698,7 +682,7 @@ function bwCardHTML(){
   return `<section class="tile bwcard">${head}
     <button class="bwbody" data-act="bwopen" aria-label="Open body weight">
       <span class="bwnow"><span class="big">${f1w(curU)}<small> ${wUnit(u)}</small></span>${ch != null ? `<span><b style="color:${toward ? 'var(--green)' : 'var(--fg)'};font-weight:600">${ch <= 0 ? '−' : '+'}${f1w(Math.abs(ch))} ${wUnit(u)}</b><span class="muted"> in 30 days</span></span>` : `<span class="muted small">${cur.d === t ? 'Logged today' : 'Last logged ' + fmtDateShort(cur.d)}</span>`}</span>
-      ${chartSlot({type:'weight', compact:true, label:'Body weight, last 30 days', pts, avg:avgPts(list, from, u), goal:goalU, fit:false, x0:msOf(from), x1:msOf(t), h:92})}
+      ${chartSlot({type:'weight', compact:true, label:'Body weight, last 30 days', pts, goal:goalU, fit:false, x0:msOf(from), x1:msOf(t), h:92})}
       <span class="bwfoot"><span class="dash">${goalU != null ? `${DASH()}Goal ${f1w(goalU)} ${wUnit(u)} · ${left < 0.05 ? 'reached' : f1w(left) + ' ' + wUnit(u) + ' to go'}` : 'No goal set'}</span><span class="more">Details ›</span></span>
     </button></section>`;
 }
@@ -713,11 +697,9 @@ function shBw(){
   let chart = '<p class="empty">No weights in this range.</p>', below = '';
   if (inR.length) {
     const pts = inR.map(e => ({x:msOf(e.d), y:toU(e.kg)}));
-    const av = avgPts(list, from, u);
-    chart = chartSlot({type:'weight', label:'Body weight chart', pts, avg:av, goal:goalU, fit, x0:msOf(from), x1:msOf(t), endLabel:'Today', h:232});
-    if (av && av.length > 1) below += `<div class="legend bwlegend"><span><i class="lg-raw"></i>Weigh-ins</span><span><i class="lg-avg"></i>${avgDays()}-day average</span></div>`;
-    const sc = weightScale(pts.map(p => p.y).concat(av ? av.map(p => p.y) : []), goalU, fit);
-    if (goalU != null && !sc.goalIn) below = `<span class="goaltag">${DASH(18)}Goal ${f1w(goalU)} is ${goalU < sc.lo ? 'below' : 'above'} this view</span>` + below;
+    chart = chartSlot({type:'weight', label:'Body weight chart', pts, goal:goalU, fit, x0:msOf(from), x1:msOf(t), endLabel:'Today', h:232});
+    const sc = weightScale(pts.map(p => p.y), goalU, fit);
+    if (goalU != null && !sc.goalIn) below = `<span class="goaltag">${DASH(18)}Goal ${f1w(goalU)} is ${goalU < sc.lo ? 'below' : 'above'} this view</span>`;
   }
   const ch = inR.length > 1 ? toU(inR[inR.length-1].kg) - toU(inR[0].kg) : null;
   const curU = cur ? toU(cur.kg) : null;
@@ -726,7 +708,7 @@ function shBw(){
     return `<button class="bwrow" data-act="bwedit" data-v="${esc(e.d)}" aria-label="Edit ${esc(fmtDateLong(e.d))}"><span class="dt">${esc(fmtDateLong(e.d))}${e.d === t ? ' · Today' : ''}</span><span><b>${f1w(toU(e.kg))}</b><span class="muted small"> ${wUnit(u)}</span></span><span class="ch" style="${dd != null && goalU != null && Math.abs(toU(e.kg) - goalU) < Math.abs(toU(prev.kg) - goalU) ? 'color:var(--green)' : ''}">${dd == null ? '' : (dd >= 0.05 ? '+' : dd <= -0.05 ? '−' : '') + f1w(Math.abs(dd))}</span></button>`; }).join('');
   return sheetTop('Body weight', athleteIds().length > 1 ? A().name : '') + `<div class="sh-body">
     <div class="figs three"><div class="fig"><b>${cur ? f1w(curU) : '–'}</b><span>${wUnit(u)} now</span></div><div class="fig"><b style="${toward ? 'color:var(--green)' : ''}">${ch == null ? '–' : (ch <= 0 ? '−' : '+') + f1w(Math.abs(ch))}</b><span>${wUnit(u)} in ${rk === 'All' ? 'all time' : rk}</span></div><div class="fig"><b>${goalU != null && cur ? f1w(Math.abs(curU - goalU)) : '–'}</b><span>${wUnit(u)} to goal</span></div></div>
-    <div class="rowsb"><div class="chips" role="group" aria-label="Range">${chips}</div><div class="chips" style="flex-wrap:nowrap"><button class="chip ${fit?'on':''}" data-act="bwfit" aria-pressed="${fit}" title="Zoom the chart to your weights">Fit</button><button class="chip ichip" data-act="bwset" aria-label="Chart settings">${IC.sliders}</button></div></div>
+    <div class="rowsb"><div class="chips" role="group" aria-label="Range">${chips}</div><button class="chip ${fit?'on':''}" data-act="bwfit" aria-pressed="${fit}" title="Zoom the chart to your weights">Fit</button></div>
     <div class="bwchart">${chart}${below}</div>
     <div class="goalrow"><span class="dash">${goalU != null ? `${DASH()}Goal <b>${f1w(goalU)}</b> ${wUnit(u)}` : '<span class="muted">No goal set</span>'}</span><button class="link" data-act="bwgoal">${goalU != null ? 'Edit goal' : 'Set goal'}</button></div>
     <button class="btn primary wide" data-act="bwlog">${IC.plus} Log weight</button>
@@ -1052,7 +1034,7 @@ function vTrends(){
       <section class="tile"><h2>Sets by muscle group</h2>${Object.keys(cat).length ? `<div class="hbars">${CAT_ORDER.filter(c => cat[c]).map(c => `<div class="hb"><span class="k">${CATS[c].name}</span><span class="tr"><i style="width:${cat[c]/catMax*100}%;background:${CATS[c].c}"></i></span><span class="v">${cat[c]}</span></div>`).join('')}</div>` : '<p class="empty">No sets in this range.</p>'}</section>
       <section class="tile"><h2>Most trained</h2>${topEx.length ? `<div class="list">${topEx.map(([ex,c]) => `<button class="lrow" data-act="openexg" data-v="${esc(ex)}"><div class="grow"><div>${esc(exMeta(ex).name)}</div></div><span class="num muted">${c} sets</span></button>`).join('')}</div>` : '<p class="empty">No exercises in this range.</p>'}</section>
       <section class="tile"><h2>New records</h2>${prsR.length ? `<div class="list">${prsR.slice(-8).reverse().map(p => `<div class="lrow"><span class="pr">${IC.trophy}</span><div class="grow"><div>${esc(exMeta(p.ex).name)}</div><div class="meta num">${esc(prText(p,S.aid))}</div></div><span class="meta">${fmtDateShort(p.date)}</span></div>`).join('')}</div>` : '<p class="empty">No new bests in this range yet.</p>'}</section>
-      <section class="tile"><div class="tile-h"><h2>Body weight</h2><span class="muted small">${wUnit(u)}</span></div>${bw.length ? chartSlot({type:'weight', label:'Body weight', pts:bw.slice().sort((a,b) => a.x - b.x), avg:avgPts(bodyList(S.aid), from, u), goal:goalOf(S.aid) != null ? wRaw(goalOf(S.aid), u) : null, fit:false, x0:msOf(from), x1:msOf(t), endLabel:'Today', h:180}) : '<p class="empty">Log your weight on Today to chart it here.</p>'}</section>
+      <section class="tile"><div class="tile-h"><h2>Body weight</h2><span class="muted small">${wUnit(u)}</span></div>${bw.length ? chartSlot({type:'weight', label:'Body weight', pts:bw.slice().sort((a,b) => a.x - b.x), goal:goalOf(S.aid) != null ? wRaw(goalOf(S.aid), u) : null, fit:false, x0:msOf(from), x1:msOf(t), endLabel:'Today', h:180}) : '<p class="empty">Log your weight on Today to chart it here.</p>'}</section>
       ${team}
     </div>
     ${sc ? `<div class="prose" style="margin-top:30px"><h2 style="color:var(--fg)">How the scores work</h2>
@@ -1303,13 +1285,6 @@ function dlgHTML(){
       <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="bwsave">Save</button></div>
       ${exists ? `<button class="link danger" data-act="bwdel" style="align-self:center;padding:6px">Delete this entry</button>` : ''}`;
   }
-  if (D.kind === 'bwset') {
-    const on = avgOn(), n = avgDays();
-    return `<h2 id="dlg-t">Chart settings</h2>
-      <button class="cbx" role="checkbox" aria-checked="${on}" data-act="bwavg"><span class="box">${on ? IC.check : ''}</span>Show rolling average</button>
-      <div class="field" style="${on ? '' : 'opacity:.45'}"><span>Average over</span><div class="chips">${[7,14,30].map(d => `<button class="chip ${n===d?'on':''}" data-act="bwavgdays" data-v="${d}" ${on ? '' : 'disabled'}>${d} days</button>`).join('')}</div></div>
-      <div class="dbtns"><button class="btn" data-act="dlgclose">Done</button></div>`;
-  }
   if (D.kind === 'bwgoal') {
     return `<h2 id="dlg-t">Weight goal</h2>${dstepper('goal', `Goal (${U})`, 'decimal')}
       <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="goalsave">Save goal</button></div>
@@ -1410,9 +1385,6 @@ const ACT = {
   bwedit(el){ openBwDlg('bwlog', el.dataset.v); },
   bwgoal(){ openBwDlg('bwgoal'); },
   bwrange(el){ S.bwRange = el.dataset.v; render(); },
-  bwset(){ S.menu = false; S.dlg = {kind:'bwset', u:unit()}; try { history.pushState({dlg:true, sheet:!!S.sheet}, ''); } catch {} render(); },
-  bwavg(){ pref.set('bwavg', !avgOn()); render(); },
-  bwavgdays(el){ pref.set('bwavgdays', +el.dataset.v); render(); },
   bwfit(){ pref.set('bwfit', !pref.get('bwfit', false)); render(); },
   bwday(el){ const D = S.dlg, t = today(), v = el.dataset.v; D.pick = v === 'pick'; if (v === 't') D.date = t; else if (v === 'y') D.date = addDays(t,-1); else if (D.date === t) D.date = addDays(t,-2); const at = bodyList(S.aid).find(e => e.d === D.date); if (at) D.bw = String(wRaw(at.kg, D.u)); renderDlg(); },
   bwsave(){ const D = S.dlg, v = num(D.bw), kg = D.u === 'lb' ? v*LB : v; if (!(kg >= 20 && kg <= 400)) return toast('Enter your weight.', 'err'); if (!DATE_RE.test(D.date) || D.date > today()) return toast('Pick a day up to today.', 'err'); patchDoc(monthPath(S.aid, D.date.slice(0,7)), {ym:D.date.slice(0,7), body:{[D.date]: kg}}); closeDlg(); toast('Weight saved'); },
