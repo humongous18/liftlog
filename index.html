@@ -305,7 +305,7 @@ textarea.txt{min-height:80px;resize:vertical}
 .bwlegend{justify-content:flex-start;font-size:13px}
 .bwlegend .lg-raw,.bwlegend .lg-avg{display:inline-block;width:18px;border-radius:2px;background:#4cbaff}
 .bwlegend .lg-raw{height:2px;opacity:.5}
-.bwlegend .lg-avg{height:3px}
+.bwlegend .lg-avg{height:3px;background:#ff8566}
 .roundrow{display:flex;align-items:center;gap:10px}
 .roundrow .txt{width:90px;flex:none;text-align:center;font-family:var(--f-num);font-size:20px;font-weight:600;background:var(--tile2)}
 .roundrow .txt:disabled{opacity:.4}
@@ -678,7 +678,7 @@ function weightChart(sp, W){
   if (fillSrc.length > 1) o += `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4cbaff" stop-opacity=".24"/><stop offset="1" stop-color="#4cbaff" stop-opacity="0"/></linearGradient></defs><path d="${fd}L${X(fillSrc[fillSrc.length-1].x).toFixed(1)},${T+ih}L${X(fillSrc[0].x).toFixed(1)},${T+ih}Z" fill="url(#${gid})"/>`;
   if (sc.goalIn) { const gy = Y(sp.goal).toFixed(1); o += `<line x1="${L}" x2="${W-R}" y1="${gy}" y2="${gy}" stroke="#16ec06" stroke-width="1.7" stroke-dasharray="7 6"/>`; if (!compact) o += `<text x="${W-R}" y="${(Y(sp.goal) - 7).toFixed(1)}" text-anchor="end" fill="#16ec06" style="font-size:13px;font-weight:600">Goal ${esc(f1w(sp.goal))}</text>`; }
   // With an average showing, the daily weigh-ins become a thinner, fainter line under the bold average.
-  o += avg ? `<path d="${d}" fill="none" stroke="#4cbaff" stroke-opacity=".5" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path d="${da}" fill="none" stroke="#4cbaff" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>`
+  o += avg ? `<path d="${d}" fill="none" stroke="#4cbaff" stroke-opacity=".5" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path d="${da}" fill="none" stroke="#ff8566" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>`
     : `<path d="${d}" fill="none" stroke="#4cbaff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
   if (!compact && pts.length <= 40) pts.forEach(p => { o += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${avg ? 2 : 2.4}" fill="#4cbaff" fill-opacity="${avg ? .6 : 1}"><title>${esc(xDate(p.x))}: ${esc(f1w(p.y))}</title></circle>`; });
   const lp = pts[pts.length-1];
