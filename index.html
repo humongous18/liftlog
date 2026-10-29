@@ -1742,11 +1742,12 @@ function parseWeightCSV(text, fallbackUnit){
 async function importWeights(file){
   const aid = S.aid;
   try {
-    const {weights, seen} = parseWeightCSV(await file.text(), unit());
+    const text = await file.text(), empty = parseCSV(text).length < 2; // a header with no rows: usually a too-narrow export date range
+    const {weights, seen} = parseWeightCSV(text, unit());
     const have = new Set(bodyList(aid).map(e => e.d));
     const add = Object.entries(weights).filter(([d]) => !have.has(d));
     const kept = Object.keys(weights).length - add.length;
-    if (!Object.keys(weights).length) throw new Error(seen ? "None of the weights in that file had a usable date." : "No body weights found in that file.");
+    if (!Object.keys(weights).length) throw new Error(seen ? "None of the weights in that file had a usable date." : empty ? "That file has no entries. In Cronometer, export again with a wider date range." : "No body weights found in that file.");
     if (!add.length) return toast(`Nothing new: all ${kept} days are already in Liftlog.`);
     const months = {}; add.forEach(([d, kg]) => { (months[d.slice(0,7)] = months[d.slice(0,7)] || {})[d] = kg; });
     for (const ym of Object.keys(months).sort()) await patchDoc(monthPath(aid, ym), {ym, body:months[ym]});
