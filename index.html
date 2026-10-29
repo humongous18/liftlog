@@ -713,6 +713,7 @@ function shBw(){
     <div class="goalrow"><span class="dash">${goalU != null ? `${DASH()}Goal <b>${f1w(goalU)}</b> ${wUnit(u)}` : '<span class="muted">No goal set</span>'}</span><button class="link" data-act="bwgoal">${goalU != null ? 'Edit goal' : 'Set goal'}</button></div>
     <button class="btn primary wide" data-act="bwlog">${IC.plus} Log weight</button>
     ${rows ? `<div><h2 style="margin-bottom:4px">Recent entries</h2><div class="list">${rows}</div></div>` : ''}
+    <div style="display:flex;flex-direction:column;gap:6px;align-items:center;margin-top:4px"><label class="tbtn" for="bw-csv">Import weights from Cronometer</label><input type="file" id="bw-csv" accept=".csv,text/csv" data-ch="bwcsv" hidden><p class="muted small" style="text-align:center">Days already in Liftlog are kept.</p></div>
   </div>`;
 }
 function openBwDlg(kind, date){
@@ -1078,6 +1079,9 @@ function vMore(){
       ${routines.length ? `<div class="list">${routines.map(([id,r]) => `<div class="lrow"><div class="grow"><div style="font-weight:600">${esc(r.name)}</div><div class="meta">${(r.exs||[]).map(x => esc(exMeta(x).name)).join(', ')}</div></div><button class="link danger" data-act="delrt" data-v="${esc(id)}">${S.confirm==='delrt'+id ? 'Confirm' : 'Delete'}</button></div>`).join('')}</div>` : '<p class="empty">Save any day\'s exercises as a routine from Routines on the Log screen.</p>'}</section></div>
     <div class="section"><div class="rowsb"><h2>Your exercises</h2><button class="link" data-act="newex">Create exercise</button></div><section class="tile">
       ${customs.length ? `<div class="list">${customs.map(m => `<div class="lrow"><div class="grow"><div>${esc(m.name)}</div><div class="meta">${CATS[m.cat].name}, ${TYPES[m.type].toLowerCase()}</div></div>${used.has(m.id) ? '<span class="meta">Used</span>' : `<button class="link danger" data-act="delex" data-v="${esc(m.id)}">Delete</button>`}</div>`).join('')}</div>` : `<p class="empty">${Object.keys(BUILTIN).length} common exercises are built in. Create your own for anything missing.</p>`}</section></div>
+    <div class="section"><h2>Cronometer</h2><section class="tile">
+      <p class="muted">On Cronometer's website, open your account settings, choose <b>Export Data</b> and export <b>Biometrics</b>. Importing adds the weigh-ins to <b>${esc(A().name)}</b>'s body weight; days already in Liftlog are kept. Any spreadsheet with a date column and a weight column works too.</p>
+      <label class="btn" for="bw-csv2">Import weights CSV</label><input type="file" id="bw-csv2" accept=".csv,text/csv" data-ch="bwcsv" hidden></section></div>
     <div class="section"><h2>FitNotes</h2><section class="tile">
       <p class="muted">In FitNotes, go to Settings, then Spreadsheet Export, and save the CSV. Importing loads it into <b>${esc(A().name)}</b>'s log and replaces any days on the same dates.</p>
       ${S.importing ? `<p><b>${esc(S.importing)}</b></p>` : `<div class="row" style="flex-wrap:wrap"><label class="btn" for="csv-in" style="flex:1">Import FitNotes CSV</label><button class="btn" data-act="export" style="flex:1">Export as CSV</button></div><input type="file" id="csv-in" accept=".csv,text/csv" data-ch="csv" hidden>`}</section></div>
@@ -1696,6 +1700,59 @@ async function runImport(file){
     S.importing = null; render(); toast(`Imported ${nDays} workouts${Object.keys(newEx).length ? ` and ${Object.keys(newEx).length} new exercises` : ''}`);
   } catch (e) { S.importing = null; render(); toast(e.message || "Couldn't import that file.", 'err'); }
 }
+/* ---------- body weight import (Cronometer biometrics, or any date + weight CSV) ---------- */
+// Dates: ISO (2024-03-05, also with a time), US style (3/5/2024), or anything Date can read.
+function toISODate(v){
+  v = String(v || '').trim(); if (!v) return null;
+  let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) { const y = m[3].length === 2 ? 2000 + +m[3] : +m[3]; return `${y}-${pad(+m[1])}-${pad(+m[2])}`; }
+  const d = new Date(v); return isNaN(d) ? null : iso(d);
+}
+// Reads the weigh-ins out of a CSV. Long format (Cronometer: Day, Metric, Unit, Amount) keeps only rows whose
+// metric is body weight; wide format uses the first "weight" column. Units come from the unit column or header,
+// else the profile's unit. Returns {date: kg}, keeping the last reading of a day.
+function parseWeightCSV(text, fallbackUnit){
+  const rows = parseCSV(text);
+  const hi = rows.findIndex(r => r.some(h => /^\s*(day|date)\b/i.test(h.replace(/^﻿/,''))));
+  if (hi < 0) throw new Error("Couldn't find a date column in that file.");
+  const H = rows[hi].map(h => h.replace(/^﻿/,'').trim().toLowerCase());
+  const iD = H.findIndex(h => /^(day|date)\b/.test(h));
+  const iM = H.findIndex(h => ['metric','name','biometric','measurement','type'].includes(h));
+  const iU = H.findIndex(h => h === 'unit' || h === 'units');
+  const iA = H.findIndex(h => ['amount','value','quantity','reading'].includes(h));
+  const long = iM >= 0 && iA >= 0;
+  const iW = long ? -1 : H.findIndex(h => /weight/.test(h) && !/fat|lean|goal|muscle|bone|water/.test(h));
+  if (!long && iW < 0) throw new Error("Couldn't find a weight column in that file.");
+  const hdrUnit = iW >= 0 ? (/\blbs?\b|pound/.test(H[iW]) ? 'lb' : /\bkg\b|kilo/.test(H[iW]) ? 'kg' : null) : null;
+  const out = {}, t = today(); let seen = 0;
+  for (const r of rows.slice(hi + 1)) {
+    let v, un;
+    if (long) { const m = (r[iM] || '').toLowerCase(); if (!/weight/.test(m) || /fat|lean|goal|muscle|bone|water/.test(m)) continue; v = num(r[iA]); un = iU >= 0 ? (r[iU] || '').toLowerCase() : ''; }
+    else { v = num(r[iW]); un = hdrUnit || ''; }
+    if (!(v > 0)) continue;
+    seen++;
+    const unitIs = /lb|pound/.test(un) ? 'lb' : /kg|kilo/.test(un) ? 'kg' : fallbackUnit;
+    const kg = unitIs === 'lb' ? v*LB : v;
+    const d = toISODate(r[iD]);
+    if (!d || d > t || !(kg >= 20 && kg <= 400)) continue;
+    out[d] = kg;
+  }
+  return {weights: out, seen};
+}
+async function importWeights(file){
+  const aid = S.aid;
+  try {
+    const {weights, seen} = parseWeightCSV(await file.text(), unit());
+    const have = new Set(bodyList(aid).map(e => e.d));
+    const add = Object.entries(weights).filter(([d]) => !have.has(d));
+    const kept = Object.keys(weights).length - add.length;
+    if (!Object.keys(weights).length) throw new Error(seen ? "None of the weights in that file had a usable date." : "No body weights found in that file.");
+    if (!add.length) return toast(`Nothing new: all ${kept} days are already in Liftlog.`);
+    const months = {}; add.forEach(([d, kg]) => { (months[d.slice(0,7)] = months[d.slice(0,7)] || {})[d] = kg; });
+    for (const ym of Object.keys(months).sort()) await patchDoc(monthPath(aid, ym), {ym, body:months[ym]});
+    toast(`Imported ${add.length} weigh-in${add.length === 1 ? '' : 's'}${kept ? `; kept ${kept} day${kept === 1 ? '' : 's'} already in Liftlog` : ''}`);
+  } catch (e) { toast(e && e.message && e.message.length < 100 ? e.message : "Couldn't read that file.", 'err'); }
+}
 function exportCSV(){
   const aid = S.aid, I = ix(aid), u = unitOf(aid), a = A();
   const q = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
@@ -1735,6 +1792,7 @@ document.addEventListener('change', ev => {
   else if (k === 'bwdate' && S.dlg && el.value) { S.dlg.date = el.value; const at = bodyList(S.aid).find(e => e.d === el.value); if (at) S.dlg.bw = String(wRaw(at.kg, S.dlg.u)); renderDlg(); }
   else if (k === 'aname') { const v = el.value.trim(); if (v) patchDoc(`athletes/${el.dataset.v}`, {name:v.slice(0,30)}); }
   else if (k === 'csv' && el.files && el.files[0]) runImport(el.files[0]);
+  else if (k === 'bwcsv' && el.files && el.files[0]) importWeights(el.files[0]);
   else if (k === 'bkmerge' && el.files && el.files[0]) loadBackup(el.files[0], 'merge');
   else if (k === 'bkreplace' && el.files && el.files[0]) loadBackup(el.files[0], 'replace');
   if (el.type === 'file') el.value = '';
