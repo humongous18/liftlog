@@ -664,50 +664,68 @@ function weightChart(sp, W){
   if (pts.length > 1) o += `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4cbaff" stop-opacity=".26"/><stop offset="1" stop-color="#4cbaff" stop-opacity="0"/></linearGradient></defs><path d="${d}L${X(pts[pts.length-1].x).toFixed(1)},${T+ih}L${X(pts[0].x).toFixed(1)},${T+ih}Z" fill="url(#${gid})"/>`;
   if (sc.goalIn) { const gy = Y(sp.goal).toFixed(1); o += `<line x1="${L}" x2="${W-R}" y1="${gy}" y2="${gy}" stroke="#16ec06" stroke-width="1.7" stroke-dasharray="7 6"/>`; if (!compact) o += `<text x="${W-R}" y="${(Y(sp.goal) - 7).toFixed(1)}" text-anchor="end" fill="#16ec06" style="font-size:13px;font-weight:600">Goal ${esc(f1w(sp.goal))}</text>`; }
   o += `<path d="${d}" fill="none" stroke="#4cbaff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-  if (!compact && pts.length <= 40) pts.forEach(p => { o += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="2.4" fill="#4cbaff"><title>${esc(xDate(p.x))}: ${esc(f1w(p.y))}</title></circle>`; });
+  if (!compact && pts.length <= 40) pts.forEach(p => { if (p.edge) return; o += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="2.4" fill="#4cbaff"><title>${esc(xDate(p.x))}: ${esc(f1w(p.y))}</title></circle>`; });
   const lp = pts[pts.length-1];
   return o + `<circle cx="${X(lp.x).toFixed(1)}" cy="${Y(lp.y).toFixed(1)}" r="${compact ? 4.5 : 5}" fill="#050708" stroke="#4cbaff" stroke-width="2.5"/></svg>`;
 }
+// One range for the Today card and the weight screen, remembered between visits.
+const BW_RANGES = {'30D':30,'3M':91,'6M':182,'1Y':365,'All':0};
+const BW_RANGE_TEXT = {'30D':'in 30 days','3M':'in 3 months','6M':'in 6 months','1Y':'in a year','All':'all time'};
+const bwRange = () => { const r = pref.get('bwrange', '30D'); return BW_RANGES[r] != null ? r : '30D'; };
+// The points to draw for the range. When an earlier weigh-in exists before the range starts, the line comes in from
+// the left edge at the weight interpolated for that day, so a range with one weigh-in still shows a line.
+// startY is the weight at the start of the range (for the change figure); null when there's nothing to compare.
+function bwSeries(list, rk, u){
+  const t = today(), span = BW_RANGES[rk], from = span ? addDays(t, -span) : (list[0] ? list[0].d : t);
+  const toU = kg => wRaw(kg, u), inR = list.filter(e => e.d >= from);
+  const prev = span ? list.filter(e => e.d < from).pop() : null;
+  const pts = inR.map(e => ({x:msOf(e.d), y:toU(e.kg)}));
+  let edge = null;
+  if (prev && pts.length) {
+    const x0 = msOf(from), px = msOf(prev.d), py = toU(prev.kg), f = (x0 - px) / (pts[0].x - px);
+    edge = {x:x0, y:py + (pts[0].y - py) * f, edge:true};
+    pts.unshift(edge);
+  }
+  const startY = edge ? edge.y : pts.length > 1 ? pts[0].y : null;
+  return {from, pts, inR, startY};
+}
 // Today card
 function bwCardHTML(){
-  const u = unit(), list = bodyList(S.aid), goal = goalOf(S.aid), t = today(), from = addDays(t, -30);
+  const u = unit(), list = bodyList(S.aid), goal = goalOf(S.aid), t = today(), rk = bwRange();
   const head = `<div class="tile-h" style="align-items:center"><h2>Body weight</h2><button class="pillbtn" data-act="bwlog">${IC.plus} Log weight</button></div>`;
   if (!list.length) return `<section class="tile bwcard">${head}<p class="empty">Log your weight to start a chart${goal == null ? ' and set a goal' : ''}.</p></section>`;
-  const cur = list[list.length-1], recent = list.filter(e => e.d >= from), first = recent.length > 1 ? recent[0] : null;
-  const toU = kg => wRaw(kg, u), ch = first ? toU(cur.kg) - toU(first.kg) : null;
-  const goalU = goal != null ? toU(goal) : null, curU = toU(cur.kg);
-  const toward = ch != null && goalU != null && Math.abs(curU - goalU) < Math.abs(toU(first.kg) - goalU);
-  const pts = (recent.length ? recent : [cur]).map(e => ({x:msOf(e.d), y:toU(e.kg)}));
+  const cur = list[list.length-1], ser = bwSeries(list, rk, u), from = ser.from, pts = ser.pts;
+  const toU = kg => wRaw(kg, u), curU = toU(cur.kg), goalU = goal != null ? toU(goal) : null;
+  const ch = ser.inR.length && ser.startY != null ? curU - ser.startY : null;
+  const toward = ch != null && goalU != null && Math.abs(curU - goalU) < Math.abs(ser.startY - goalU);
   const left = goalU != null ? Math.abs(curU - goalU) : null;
   return `<section class="tile bwcard">${head}
     <button class="bwbody" data-act="bwopen" aria-label="Open body weight">
-      <span class="bwnow"><span class="big">${f1w(curU)}<small> ${wUnit(u)}</small></span>${ch != null ? `<span><b style="color:${toward ? 'var(--green)' : 'var(--fg)'};font-weight:600">${ch <= 0 ? '−' : '+'}${f1w(Math.abs(ch))} ${wUnit(u)}</b><span class="muted"> in 30 days</span></span>` : `<span class="muted small">${cur.d === t ? 'Logged today' : 'Last logged ' + fmtDateShort(cur.d)}</span>`}</span>
-      ${chartSlot({type:'weight', compact:true, label:'Body weight, last 30 days', pts, goal:goalU, fit:false, x0:msOf(from), x1:msOf(t), h:92})}
+      <span class="bwnow"><span class="big">${f1w(curU)}<small> ${wUnit(u)}</small></span>${ch != null ? `<span><b style="color:${toward ? 'var(--green)' : 'var(--fg)'};font-weight:600">${ch <= 0 ? '−' : '+'}${f1w(Math.abs(ch))} ${wUnit(u)}</b><span class="muted"> ${BW_RANGE_TEXT[rk]}</span></span>` : `<span class="muted small">${cur.d === t ? 'Logged today' : 'Last logged ' + fmtDateShort(cur.d)}</span>`}</span>
+      ${pts.length ? chartSlot({type:'weight', compact:true, label:`Body weight, ${rk === 'All' ? 'all time' : BW_RANGE_TEXT[rk].replace('in ', 'last ')}`, pts, goal:goalU, fit:!!pref.get('bwfit', false), x0:msOf(from), x1:msOf(t), h:92}) : `<span class="muted small">No weigh-ins ${rk === 'All' ? 'yet' : BW_RANGE_TEXT[rk]}.</span>`}
       <span class="bwfoot"><span class="dash">${goalU != null ? `${DASH()}Goal ${f1w(goalU)} ${wUnit(u)} · ${left < 0.05 ? 'reached' : f1w(left) + ' ' + wUnit(u) + ' to go'}` : 'No goal set'}</span><span class="more">Details ›</span></span>
     </button></section>`;
 }
 // Body weight sheet
-const BW_RANGES = {'1M':30,'3M':91,'6M':182,'1Y':365,'All':0};
 function shBw(){
-  const u = unit(), list = bodyList(S.aid), goal = goalOf(S.aid), t = today(), rk = S.bwRange || '3M', fit = !!pref.get('bwfit', false);
+  const u = unit(), list = bodyList(S.aid), goal = goalOf(S.aid), t = today(), rk = bwRange(), fit = !!pref.get('bwfit', false);
   const toU = kg => wRaw(kg, u), goalU = goal != null ? toU(goal) : null;
-  const span = BW_RANGES[rk], from = span ? addDays(t, -span) : (list[0] ? list[0].d : t);
-  const inR = list.filter(e => e.d >= from), cur = list[list.length-1];
+  const ser = bwSeries(list, rk, u), from = ser.from, inR = ser.inR, cur = list[list.length-1];
   const chips = Object.keys(BW_RANGES).map(k => `<button class="chip ${rk===k?'on':''}" data-act="bwrange" data-v="${k}" aria-pressed="${rk===k}">${k}</button>`).join('');
   let chart = '<p class="empty">No weights in this range.</p>', below = '';
   if (inR.length) {
-    const pts = inR.map(e => ({x:msOf(e.d), y:toU(e.kg)}));
+    const pts = ser.pts;
     chart = chartSlot({type:'weight', label:'Body weight chart', pts, goal:goalU, fit, x0:msOf(from), x1:msOf(t), endLabel:'Today', h:232});
     const sc = weightScale(pts.map(p => p.y), goalU, fit);
     if (goalU != null && !sc.goalIn) below = `<span class="goaltag">${DASH(18)}Goal ${f1w(goalU)} is ${goalU < sc.lo ? 'below' : 'above'} this view</span>`;
   }
-  const ch = inR.length > 1 ? toU(inR[inR.length-1].kg) - toU(inR[0].kg) : null;
   const curU = cur ? toU(cur.kg) : null;
-  const toward = ch != null && goalU != null && Math.abs(curU - goalU) < Math.abs(toU(inR[0].kg) - goalU);
+  const ch = inR.length && ser.startY != null ? curU - ser.startY : null;
+  const toward = ch != null && goalU != null && Math.abs(curU - goalU) < Math.abs(ser.startY - goalU);
   const rows = list.slice().reverse().slice(0, 30).map((e, i, arr) => { const prev = list[list.length - 2 - i]; const dd = prev ? toU(e.kg) - toU(prev.kg) : null;
     return `<button class="bwrow" data-act="bwedit" data-v="${esc(e.d)}" aria-label="Edit ${esc(fmtDateLong(e.d))}"><span class="dt">${esc(fmtDateLong(e.d))}${e.d === t ? ' · Today' : ''}</span><span><b>${f1w(toU(e.kg))}</b><span class="muted small"> ${wUnit(u)}</span></span><span class="ch" style="${dd != null && goalU != null && Math.abs(toU(e.kg) - goalU) < Math.abs(toU(prev.kg) - goalU) ? 'color:var(--green)' : ''}">${dd == null ? '' : (dd >= 0.05 ? '+' : dd <= -0.05 ? '−' : '') + f1w(Math.abs(dd))}</span></button>`; }).join('');
   return sheetTop('Body weight', athleteIds().length > 1 ? A().name : '') + `<div class="sh-body">
-    <div class="figs three"><div class="fig"><b>${cur ? f1w(curU) : '–'}</b><span>${wUnit(u)} now</span></div><div class="fig"><b style="${toward ? 'color:var(--green)' : ''}">${ch == null ? '–' : (ch <= 0 ? '−' : '+') + f1w(Math.abs(ch))}</b><span>${wUnit(u)} in ${rk === 'All' ? 'all time' : rk}</span></div><div class="fig"><b>${goalU != null && cur ? f1w(Math.abs(curU - goalU)) : '–'}</b><span>${wUnit(u)} to goal</span></div></div>
+    <div class="figs three"><div class="fig"><b>${cur ? f1w(curU) : '–'}</b><span>${wUnit(u)} now</span></div><div class="fig"><b style="${toward ? 'color:var(--green)' : ''}">${ch == null ? '–' : (ch <= 0 ? '−' : '+') + f1w(Math.abs(ch))}</b><span>${wUnit(u)} ${BW_RANGE_TEXT[rk]}</span></div><div class="fig"><b>${goalU != null && cur ? f1w(Math.abs(curU - goalU)) : '–'}</b><span>${wUnit(u)} to goal</span></div></div>
     <div class="rowsb"><div class="chips" role="group" aria-label="Range">${chips}</div><button class="chip ${fit?'on':''}" data-act="bwfit" aria-pressed="${fit}" title="Zoom the chart to your weights">Fit</button></div>
     <div class="bwchart">${chart}${below}</div>
     <div class="goalrow"><span class="dash">${goalU != null ? `${DASH()}Goal <b>${f1w(goalU)}</b> ${wUnit(u)}` : '<span class="muted">No goal set</span>'}</span><button class="link" data-act="bwgoal">${goalU != null ? 'Edit goal' : 'Set goal'}</button></div>
@@ -1388,7 +1406,7 @@ const ACT = {
   bwlog(){ openBwDlg('bwlog'); },
   bwedit(el){ openBwDlg('bwlog', el.dataset.v); },
   bwgoal(){ openBwDlg('bwgoal'); },
-  bwrange(el){ S.bwRange = el.dataset.v; render(); },
+  bwrange(el){ pref.set('bwrange', el.dataset.v); render(); },
   bwfit(){ pref.set('bwfit', !pref.get('bwfit', false)); render(); },
   bwday(el){ const D = S.dlg, t = today(), v = el.dataset.v; D.pick = v === 'pick'; if (v === 't') D.date = t; else if (v === 'y') D.date = addDays(t,-1); else if (D.date === t) D.date = addDays(t,-2); const at = bodyList(S.aid).find(e => e.d === D.date); if (at) D.bw = String(wRaw(at.kg, D.u)); renderDlg(); },
   bwsave(){ const D = S.dlg, v = num(D.bw), kg = D.u === 'lb' ? v*LB : v; if (!(kg >= 20 && kg <= 400)) return toast('Enter your weight.', 'err'); if (!DATE_RE.test(D.date) || D.date > today()) return toast('Pick a day up to today.', 'err'); patchDoc(monthPath(S.aid, D.date.slice(0,7)), {ym:D.date.slice(0,7), body:{[D.date]: kg}}); closeDlg(); toast('Weight saved'); },
