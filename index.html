@@ -129,6 +129,7 @@ h3{font-size:15px;font-weight:600;color:var(--mute)}
 .wd.future .col{opacity:.45}
 .wkgoal{font-size:15px;color:var(--mute)}
 .wkgoal b{font-family:var(--f-num);font-size:24px;font-weight:700;color:var(--fg);margin-right:1px}
+.figbtn{text-align:left;padding:0}
 .figs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 
 /* buttons & inputs */
@@ -1069,6 +1070,7 @@ function vTrends(){
   const sc = scoresOn();
   const avgStrain = inR.length ? inR.reduce((a,d) => a + I.dayStrain[d], 0)/inR.length : 0;
   const prsR = I.prs.filter(p => p.date >= from);
+  const skI = streakInfo(S.aid);
   const chips = Object.keys(RANGES).map(k => `<button class="chip ${S.trendRange===k?'on':''}" data-act="trange" data-v="${k}">${k}</button>`).join('');
   const days = []; for (let i=n-1; i>=0; i--) days.push(addDays(t,-i));
   const step = n > 91 ? 3 : 1, readyPts = [];
@@ -1099,7 +1101,7 @@ function vTrends(){
   }
   return `<div class="wrap">${banners()}${topbar('Trends', A().name)}
     <div class="scroller" style="margin-bottom:18px">${chips}</div>
-    <div class="figs" style="margin-bottom:22px"><div class="fig"><b>${inR.length}</b><span>workouts</span></div>${sc ? `<div class="fig"><b style="color:var(--link)">${inR.length ? avgStrain.toFixed(1) : '–'}</b><span>avg strain</span></div>` : `<div class="fig"><b>${sumF('sets')}</b><span>sets</span></div>`}<div class="fig"><b>${fmtVol(sumF('vol'),u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prsR.length}</b><span>records</span></div></div>
+    <div class="figs three" style="margin-bottom:22px"><div class="fig"><b>${inR.length}</b><span>workouts</span></div><div class="fig"><b>${sumF('sets')}</b><span>sets</span></div><button class="fig figbtn" data-act="streakopen"><b style="color:#ff8a2a">${skI.days}</b><span>day streak</span></button><div class="fig"><b>${fmtVol(sumF('vol'),u)}</b><span>${wUnit(u)} lifted</span></div><div class="fig"><b style="color:var(--yellow)">${prsR.length}</b><span>records</span></div><button class="fig figbtn" data-act="streakopen"><b>${skI.best}</b><span>best streak</span></button></div>
     <div class="grid two">
       ${sc ? `<section class="tile span2"><div class="tile-h"><h2>${n <= 31 ? 'Strain by day' : 'Average strain by week'}</h2><span class="muted small">0 to 21</span></div>${strainChart}</section>
       <section class="tile"><h2>Readiness</h2>${readyPts.length ? chartSlot({type:'line', label:'Readiness', series:[{pts:readyPts, color:'#16ec06'}], yMin:0, yMax:100, xfmt:xDate, fmt:v => Math.round(v)+'%', h:170, noArea:true, bands:[[0,34,'rgba(255,59,78,.08)'],[34,67,'rgba(255,222,0,.06)'],[67,100,'rgba(22,236,6,.06)']]}) : '<p class="empty">Appears once you have a workout or check-in in this range.</p>'}</section>
