@@ -1149,12 +1149,31 @@ function streakInfo(aid){
   const adds = (Array.isArray(a.fzlog) ? a.fzlog : []).filter(d => DATE_RE.test(d)).sort();
   let ai = 0;
   const takeAdds = upTo => { while (ai < adds.length && adds[ai] <= upTo) { if (adds[ai] >= FREEZE_START && freezes < FREEZE_MAX) freezes++; ai++; } };
+  // Days of a week that count, one per day: from Sunday when a streak is running (or, starting fresh, from the first
+  // day with a workout or weigh-in) up to the last day the week's targets could still be met. A day counts once the
+  // targets are reachable with only the days after it, so today's +1 is secured (logging today's workout earns it when
+  // needed) and the number never has to go back down. Reachability only falls during a week, so counting stops there.
+  const weekDays = (ws, tg, lastIdx, fresh) => {
+    let start = 0;
+    if (fresh) { start = -1; for (let i = 0; i <= lastIdx; i++) { const d = addDays(ws, i); if (wset.has(d) || bset.has(d)) { start = i; break; } } if (start < 0) return 0; }
+    let n = 0, dw = 0, db = 0;
+    for (let i = 0; i <= lastIdx; i++) {
+      const d = addDays(ws, i); if (wset.has(d)) dw++; if (bset.has(d)) db++;
+      const left = 6 - i, alive = dw + left >= tg.g && db + left >= tg.wt;
+      if (!alive) break;
+      if (i >= start) n++;
+    }
+    return n;
+  };
+  // A finished week on target keeps its days; a missed week covered by a freeze keeps the days it counted before it
+  // fell out of reach, so the number never drops; a missed week without a freeze resets to 0 when the new week starts.
   if (firstDay) for (let w = sundayOf(firstDay); w < cur; w = addDays(w, 7)) {
     const tg = targetsFor(a, w), met = count(w, wset) >= tg.g && count(w, bset) >= tg.wt, live = w >= FREEZE_START;
+    const add = weekDays(w, tg, 6, streak === 0);
     if (live) takeAdds(addDays(w, 6));
-    if (met) { streak += 7; onTarget++; if (live) earnRun++; if (live && earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done'}); }
-    else if (live && streak > 0 && freezes > 0) { freezes--; weeks.push({w, s:'frozen'}); }
-    else { streak = 0; earnRun = 0; weeks.push({w, s:'missed'}); }
+    if (met) { streak += add; onTarget++; if (live) earnRun++; if (live && earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done', add}); }
+    else if (live && streak > 0 && freezes > 0) { freezes--; streak += add; weeks.push({w, s:'frozen', add}); }
+    else { streak = 0; earnRun = 0; weeks.push({w, s:'missed', add:0}); }
     best = Math.max(best, streak);
   }
   takeAdds(addDays(cur, 6));
@@ -1165,9 +1184,10 @@ function streakInfo(aid){
   const freeWo = (wset.has(t) ? [] : [t]).concat(later), freeWi = (bset.has(t) ? [] : [t]).concat(later);
   const met = !needWo && !needWi, reachable = needWo <= freeWo.length && needWi <= freeWi.length;
   const state = met ? 'met' : reachable ? 'ontrack' : streak > 0 && freezes > 0 ? 'freeze' : streak > 0 ? 'losing' : 'none';
-  const days = streak + (met ? dow + 1 : 0);
+  const curAdd = weekDays(cur, tg, dow, streak === 0);
+  const days = streak + curAdd;
   best = Math.max(best, days);
-  const v = {days, best, freezes, state, onTarget: onTarget + (met ? 1 : 0), weeks, tg, wo, wi, needWo, needWi, freeWo, freeWi, cur, dow, hasData: !!firstDay};
+  const v = {days, best, freezes, state, curAdd, onTarget: onTarget + (met ? 1 : 0), weeks, tg, wo, wi, needWo, needWi, freeWo, freeWi, cur, dow, hasData: !!firstDay};
   SC[aid] = {key, v};
   return v;
 }
@@ -1180,8 +1200,8 @@ function streakNudge(si){
   const part = (need, free, verb, done) => !need ? '' : need === free.length ? `${verb} ${list(free.map(short))}` : `${verb} ${need === 1 ? 'once' : need === 2 ? 'twice' : need + ' times'}${done ? ' more' : ''} this week`;
   if (!si.hasData) return 'Hit your weekly targets to start a streak.';
   if (si.state === 'met') return 'Week complete. Streak is safe.';
-  if (si.state === 'freeze') return "This week's target is out of reach. A freeze will keep your streak.";
-  if (si.state === 'losing') return 'Target out of reach this week. Your streak resets Sunday.';
+  if (si.state === 'freeze') return "This week is out of reach. A freeze will keep your streak.";
+  if (si.state === 'losing') return 'This week is out of reach. Your streak resets Sunday.';
   if (si.state === 'none') return 'Start a streak next week.';
   const parts = [part(si.needWo, si.freeWo, 'work out', si.wo), part(si.needWi, si.freeWi, 'weigh in', si.wi)].filter(Boolean);
   const txt = parts.join(', and ');
@@ -1208,9 +1228,9 @@ function shStreak(){
   if (ids.length > 1) {
     const inIds = ids.filter(id => streakInfo(id).hasData), all = inIds.map(id => streakInfo(id));
     if (all.length > 1 && inIds.includes(S.aid)) {
-      const map = all.map(x => Object.fromEntries(x.weeks.map(w => [w.w, w.s])));
-      let n = 0; for (let w = addDays(si.cur, -7); ; w = addDays(w, -7)) { if (map.every(m => m[w] === 'done')) n++; else break; }
-      const tDays = n * 7 + (all.every(x => x.state === 'met') ? si.dow + 1 : 0);
+      const map = all.map(x => Object.fromEntries(x.weeks.map(w => [w.w, w])));
+      let tDays = Math.min(...all.map(x => x.curAdd));
+      for (let w = addDays(si.cur, -7); ; w = addDays(w, -7)) { const ws = map.map(m => m[w]); if (ws.every(x => x && x.s !== 'missed')) tDays += Math.min(...ws.map(x => x.add)); else break; }
       together = `<section class="tile"><div class="tile-h"><h2>Together</h2><span class="sk-mini"><span style="color:#ff8a2a">${IC.flame}</span><b>${tDays}</b> days</span></div>
         <div class="list">${inIds.map((id, i) => `<div class="lrow"><div class="grow"><div style="font-weight:600;color:${esc(S.athletes[id].color)}">${esc(S.athletes[id].name)}</div><div class="meta">${all[i].wo}/${all[i].tg.g} workouts${all[i].tg.wt ? ` · ${all[i].wi}/${all[i].tg.wt} weigh-ins` : ''}</div></div><span class="sk-mini"><span style="color:${all[i].days ? '#ff8a2a' : '#5c676e'}">${IC.flame}</span><b>${all[i].days}</b></span></div>`).join('')}</div>
         <p class="muted small">Days you've ${all.length > 2 ? 'all' : 'both'} been on target.</p></section>`;
