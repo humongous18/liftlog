@@ -273,7 +273,7 @@ textarea.txt{min-height:80px;resize:vertical}
 .cday.sk-l .band{border-top-left-radius:21px;border-bottom-left-radius:21px}
 .cday.sk-r .band{border-top-right-radius:21px;border-bottom-right-radius:21px}
 .cday.today.sk .n{background:none;box-shadow:inset 0 0 0 2.5px #f2f5f6}
-.cday.today.sk-soft .n{color:#fff}
+.cday.today.sk-frz .n{box-shadow:inset 0 0 0 2.5px #050708}
 .legend i.skl{width:16px;height:10px;border-radius:5px}
 .cday .dots{display:flex;gap:3px;height:7px}
 .cday .dots i{width:7px;height:7px;border-radius:50%;background:var(--c)}
@@ -1049,7 +1049,7 @@ function vCal(){
       // A pill runs through the week row without a break while the streak lasts, rounding only where it starts or stops.
       const k = cal[d], kPrev = i > 1 && col > 0 && cal[`${ym}-${pad(i-1)}`], kNext = i < nDays && col < 6 && cal[`${ym}-${pad(i+1)}`];
       const sk = k ? ` sk sk-${k}${kPrev ? '' : ' sk-l'}${kNext ? '' : ' sk-r'}` : '';
-      cells += `<button class="cday${d===t?' today':''}${sk}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}${k ? ', ' + SK_LBL[k] : ''}${cats ? ', workout: ' + CAT_ORDER.filter(c => cats[c]).map(c => CATS[c].name).join(', ') : ''}"><span class="band"><span class="n">${i}</span></span><span class="dots">${dots}</span></button>`;
+      cells += `<button class="cday${d===t?' today':''}${sk}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}${k ? ', ' + (k === 'frz' && d >= sundayOf(t) ? 'covered by a freeze' : SK_LBL[k]) : ''}${cats ? ', workout: ' + CAT_ORDER.filter(c => cats[c]).map(c => CATS[c].name).join(', ') : ''}"><span class="band"><span class="n">${i}</span></span><span class="dots">${dots}</span></button>`;
     }
     return `<section class="cmonth" id="m-${ym}" data-ym="${ym}" data-n="${n}"><h2 class="cmh">${first.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><div class="cgrid">${cells}</div></section>`;
   };
@@ -1217,8 +1217,7 @@ function streakInfo(aid){
     else if (x.s === 'frozen') { mark(x.w, x.start, x.add, 'soft'); mark(x.w, x.start + x.add, 7 - x.start - x.add, 'frz'); }
   }
   // This week: days counted so far; once out of reach, a freeze covers the rest up to today.
-  const keep = state === 'met' || state === 'ontrack';
-  mark(cur, curStart, curAdd, keep ? 'on' : 'soft');
+  mark(cur, curStart, curAdd, state === 'freeze' ? 'soft' : 'on');
   if (state === 'freeze') mark(cur, curStart + curAdd, dow + 1 - curStart - curAdd, 'frz');
   const v = {days, best, freezes, state, curAdd, cal, onTarget: onTarget + (met ? 1 : 0), weeks, tg, wo, wi, needWo, needWi, freeWo, freeWi, cur, dow, hasData: !!firstDay};
   SC[aid] = {key, v};
