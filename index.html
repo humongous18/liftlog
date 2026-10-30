@@ -272,8 +272,9 @@ textarea.txt{min-height:80px;resize:vertical}
 .cday.sk-soft .n{font-weight:600}
 .cday.sk-l .band{border-top-left-radius:21px;border-bottom-left-radius:21px}
 .cday.sk-r .band{border-top-right-radius:21px;border-bottom-right-radius:21px}
-.cday.today.sk .n{background:none;box-shadow:inset 0 0 0 2.5px #f2f5f6}
-.cday.today.sk-frz .n{box-shadow:inset 0 0 0 2.5px #050708}
+.cday.today.sk .n{color:#fff;font-weight:600}
+.cday.today.sk.wo .n{background:linear-gradient(180deg,#ff9a3c,#ff7a1a);color:#050708;font-weight:700}
+.cday.today.sk-frz:not(.wo) .n{background:none;color:#050708;font-weight:700;box-shadow:inset 0 0 0 2.5px #050708}
 .legend i.skl{width:16px;height:10px;border-radius:5px}
 .cday .dots{display:flex;gap:3px;height:7px}
 .cday .dots i{width:7px;height:7px;border-radius:50%;background:var(--c)}
@@ -1030,7 +1031,8 @@ function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
 /* ---------- calendar ---------- */
 function vCal(){
   const I = ix(S.aid), t = today(), cur = t.slice(0,7), cal = streakInfo(S.aid).cal;
-  const SK_LBL = {on:'streak day', soft:'streak day, missed week kept by a freeze', frz:'freeze used'};
+  const wk = sundayOf(t), woToday = !!I.dayCats[t];
+  const skLabel = (d, k) => k === 'on' ? 'streak day, perfect week' : k === 'soft' ? (d >= wk ? 'streak day' : 'streak day, missed week kept by a freeze') : d >= wk ? 'covered by a freeze' : 'freeze used';
   // Months run from the first logged workout (at most 3 years back, at least 3 months) to 2 months ahead.
   const firstData = I.dates.length ? I.dates[0].slice(0,7) : cur;
   const ymAdd = (ym, n) => { const d = parseISO(ym+'-01'); d.setMonth(d.getMonth()+n); return iso(d).slice(0,7); };
@@ -1041,15 +1043,20 @@ function vCal(){
   const dows = [0,1,2,3,4,5,6].map(i => new Date(2026,1,1+i).toLocaleDateString(undefined,{weekday:'short'}).toUpperCase());
   const monthHTML = ym => {
     const first = parseISO(ym+'-01'), lead = first.getDay(), nDays = new Date(first.getFullYear(), first.getMonth()+1, 0).getDate();
-    let cells = dows.map(d => `<div class="cdow" aria-hidden="true">${d}</div>`).join('') + '<span></span>'.repeat(lead), n = 0;
-    for (let i=1; i<=nDays; i++) {
-      const d = `${ym}-${pad(i)}`, cats = I.dayCats[d], col = (lead + i - 1) % 7;
+    let cells = dows.map(d => `<div class="cdow" aria-hidden="true">${d}</div>`).join(''), n = 0;
+    // Full week rows. Empty cells before the 1st and after the last day carry the pill for their real date, so a week
+    // that runs across two months keeps its full pill in both (a month that hasn't started yet doesn't show this week).
+    // A pill runs through the row without a break while the streak lasts, rounding only where it starts or stops.
+    const rows = Math.ceil((lead + nDays) / 7), d0 = addDays(ym + '-01', -lead);
+    const drawn = d => cal[d] && (d.slice(0,7) === ym || d < wk || ym <= cur) ? cal[d] : '';
+    for (let j = 0; j < rows * 7; j++) {
+      const d = addDays(d0, j), col = j % 7, inMonth = d.slice(0,7) === ym, k = drawn(d);
+      const sk = k ? ` sk sk-${k}${col > 0 && drawn(addDays(d, -1)) ? '' : ' sk-l'}${col < 6 && drawn(addDays(d, 1)) ? '' : ' sk-r'}` : '';
+      if (!inMonth) { cells += k ? `<span class="cday${sk}" aria-hidden="true"><span class="band"></span></span>` : '<span></span>'; continue; }
+      const cats = I.dayCats[d];
       if (cats) n++;
       const dots = cats ? CAT_ORDER.filter(c => cats[c]).slice(0,5).map(c => `<i style="--c:${CATS[c].c}"></i>`).join('') : '';
-      // A pill runs through the week row without a break while the streak lasts, rounding only where it starts or stops.
-      const k = cal[d], kPrev = i > 1 && col > 0 && cal[`${ym}-${pad(i-1)}`], kNext = i < nDays && col < 6 && cal[`${ym}-${pad(i+1)}`];
-      const sk = k ? ` sk sk-${k}${kPrev ? '' : ' sk-l'}${kNext ? '' : ' sk-r'}` : '';
-      cells += `<button class="cday${d===t?' today':''}${sk}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}${k ? ', ' + (k === 'frz' && d >= sundayOf(t) ? 'covered by a freeze' : SK_LBL[k]) : ''}${cats ? ', workout: ' + CAT_ORDER.filter(c => cats[c]).map(c => CATS[c].name).join(', ') : ''}"><span class="band"><span class="n">${i}</span></span><span class="dots">${dots}</span></button>`;
+      cells += `<button class="cday${d===t ? ' today' + (woToday ? ' wo' : '') : ''}${sk}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}${k ? ', ' + skLabel(d, k) : ''}${cats ? ', workout: ' + CAT_ORDER.filter(c => cats[c]).map(c => CATS[c].name).join(', ') : ''}"><span class="band"><span class="n">${+d.slice(8)}</span></span><span class="dots">${dots}</span></button>`;
     }
     return `<section class="cmonth" id="m-${ym}" data-ym="${ym}" data-n="${n}"><h2 class="cmh">${first.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><div class="cgrid">${cells}</div></section>`;
   };
@@ -1059,7 +1066,7 @@ function vCal(){
   return `<div class="wrap calwrap">${banners()}${topbar('Calendar', '')}
     ${hasEarlier ? `<div style="text-align:center"><button class="tbtn" data-act="calmore">Show earlier months</button></div>` : ''}
     ${months.map(monthHTML).join('')}
-    ${Object.keys(cal).length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${[['on','Streak day','linear-gradient(180deg,#ff9a3c,#ff7a1a)'],['soft','Missed week, kept','rgba(255,138,42,.28)'],['frz','Freeze used','linear-gradient(180deg,#8fdcff,#4cbaff)']].filter(([k]) => Object.values(cal).includes(k)).map(([,l,c]) => `<span><i class="skl" style="background:${c}"></i>${l}</span>`).join('')}</div>` : ''}
+    ${Object.keys(cal).length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${[['on','Perfect week','linear-gradient(180deg,#ff9a3c,#ff7a1a)'],['soft','Streak day','rgba(255,138,42,.28)'],['frz','Freeze used','linear-gradient(180deg,#8fdcff,#4cbaff)']].filter(([k]) => Object.values(cal).includes(k)).map(([,l,c]) => `<span><i class="skl" style="background:${c}"></i>${l}</span>`).join('')}</div>` : ''}
     ${used.length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}
     <div class="calbar"><button class="icon-btn" data-act="cal" data-v="-1" aria-label="Previous month">${IC.back}</button><b id="calcount" aria-live="polite">${calCountText(nCur)}</b><button class="icon-btn" data-act="cal" data-v="1" aria-label="Next month">${IC.next}</button></div>
   </div>`;
@@ -1208,7 +1215,8 @@ function streakInfo(aid){
   const curAdd = weekDays(cur, tg, dow, streak === 0), curStart = wdStart;
   const days = streak + curAdd;
   best = Math.max(best, days);
-  // Calendar marks, by date: 'on' streak day, 'soft' counted day of a missed week a freeze kept, 'frz' frozen day.
+  // Calendar marks, by date: 'on' day of a perfect (finished, on target) week, 'soft' counted day of a missed week a
+  // freeze kept or of this unfinished week, 'frz' frozen day.
   // A missed week without a freeze ended the streak, so it shows nothing.
   const cal = {};
   const mark = (ws, from, n, k) => { for (let i = from; i < from + n && i < 7; i++) cal[addDays(ws, i)] = k; };
@@ -1216,8 +1224,9 @@ function streakInfo(aid){
     if (x.s === 'done') mark(x.w, x.start, x.add, 'on');
     else if (x.s === 'frozen') { mark(x.w, x.start, x.add, 'soft'); mark(x.w, x.start + x.add, 7 - x.start - x.add, 'frz'); }
   }
-  // This week: days counted so far; once out of reach, a freeze covers the rest up to today.
-  mark(cur, curStart, curAdd, state === 'freeze' ? 'soft' : 'on');
+  // This week can't be perfect until it's over: days counted so far are faded; once out of reach, a freeze covers the
+  // rest up to today.
+  mark(cur, curStart, curAdd, 'soft');
   if (state === 'freeze') mark(cur, curStart + curAdd, dow + 1 - curStart - curAdd, 'frz');
   const v = {days, best, freezes, state, curAdd, cal, onTarget: onTarget + (met ? 1 : 0), weeks, tg, wo, wi, needWo, needWi, freeWo, freeWi, cur, dow, hasData: !!firstDay};
   SC[aid] = {key, v};
