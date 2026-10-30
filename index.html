@@ -246,6 +246,8 @@ textarea.txt{min-height:80px;resize:vertical}
 .hw.frozen{background:#4cbaff}
 .hw.empty{background:transparent;box-shadow:inset 0 0 0 1px #1f262b}
 .hw.now{background:transparent;box-shadow:inset 0 0 0 2px var(--fg)}
+.fzmore{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:36px;opacity:.75}
+.link.small{font-size:13px}
 .sk-mini{display:inline-flex;align-items:center;gap:4px}
 .sk-mini svg{width:18px;height:18px}
 .sk-mini b{font-family:var(--f-num);font-size:20px}
@@ -1121,6 +1123,9 @@ function vTrends(){
 const WT_OPTS = [[0,'Off'],[1,'1'],[3,'3'],[7,'Daily']];
 const MILESTONES = [7,14,30,60,100,180,365];
 const FREEZE_MAX = 2, FREEZE_EVERY = 4;
+// Freezes start counting the week streaks launched. Earlier weeks (imported history included) still build or break
+// the streak, but don't spend or earn freezes, so the starting freeze is always there on day one.
+const FREEZE_START = '2026-10-25';
 const sundayOf = d => addDays(d, -parseISO(d).getDay());
 function targetsFor(a, ws){
   const h = Array.isArray(a.thist) ? a.thist : [];
@@ -1137,13 +1142,19 @@ function streakInfo(aid){
   const cur = sundayOf(t), firstDay = [I.dates[0], Object.keys(I.body).sort()[0]].filter(Boolean).sort()[0];
   let streak = 0, best = 0, freezes = 1, earnRun = 0, onTarget = 0;
   const weeks = [];
+  // Freezes added by hand (More > Streak freezes), by date; each lands in the week it was added, up to the cap.
+  const adds = (Array.isArray(a.fzlog) ? a.fzlog : []).filter(d => DATE_RE.test(d)).sort();
+  let ai = 0;
+  const takeAdds = upTo => { while (ai < adds.length && adds[ai] <= upTo) { if (adds[ai] >= FREEZE_START && freezes < FREEZE_MAX) freezes++; ai++; } };
   if (firstDay) for (let w = sundayOf(firstDay); w < cur; w = addDays(w, 7)) {
-    const tg = targetsFor(a, w), met = count(w, wset) >= tg.g && count(w, bset) >= tg.wt;
-    if (met) { streak += 7; onTarget++; earnRun++; if (earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done'}); }
-    else if (streak > 0 && freezes > 0) { freezes--; weeks.push({w, s:'frozen'}); }
+    const tg = targetsFor(a, w), met = count(w, wset) >= tg.g && count(w, bset) >= tg.wt, live = w >= FREEZE_START;
+    if (live) takeAdds(addDays(w, 6));
+    if (met) { streak += 7; onTarget++; earnRun++; if (live && earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done'}); }
+    else if (live && streak > 0 && freezes > 0) { freezes--; weeks.push({w, s:'frozen'}); }
     else { streak = 0; earnRun = 0; weeks.push({w, s:'missed'}); }
     best = Math.max(best, streak);
   }
+  takeAdds(addDays(cur, 6));
   const tg = targetsFor(a, cur), dow = parseISO(t).getDay();
   const wo = count(cur, wset), wi = count(cur, bset), needWo = Math.max(0, tg.g - wo), needWi = Math.max(0, tg.wt - wi);
   const later = []; for (let i = dow + 1; i < 7; i++) later.push(addDays(cur, i));
@@ -1273,7 +1284,12 @@ function vMore(){
       <label class="btn" for="bw-csv2">Import weights from Cronometer</label><input type="file" id="bw-csv2" accept=".csv,text/csv" data-ch="bwcsv" hidden>
       <button class="btn" data-act="export">Export workouts (CSV)</button>`}
       <p class="muted small">Imports go to ${esc(A().name)}. FitNotes: Settings › Spreadsheet Export. Cronometer: Settings › Export Data › Biometrics.</p></section></div>
+    ${freezeHTML()}
   </div>`;
+}
+function freezeHTML(){
+  const si = streakInfo(S.aid), full = si.freezes >= FREEZE_MAX;
+  return `<div class="fzmore"><span class="muted small">Streak freezes: ${si.freezes} of ${FREEZE_MAX}</span>${full ? '' : `<button class="link small" data-act="addfreeze">${S.confirm === 'addfreeze' ? 'Tap again to add' : 'Add a freeze'}</button>`}</div>`;
 }
 function notifyHTML(){
   if (!('Notification' in window)) return isIOS() && !standalone() ? '<p class="muted">Install Liftlog to turn on alerts.</p>' : '<p class="muted">Not available in this browser.</p>';
@@ -1573,6 +1589,11 @@ const ACT = {
     inp.value = String(v); S.dlg[f] = inp.value; const o = $('#dl-out'); if (o) o.innerHTML = dlgOut();
   },
   moreall(el){ S.moreAll = Object.assign({}, S.moreAll, {[el.dataset.v]: !(S.moreAll || {})[el.dataset.v]}); render(); },
+  addfreeze(){
+    if (S.confirm !== 'addfreeze') { S.confirm = 'addfreeze'; render(); return; }
+    S.confirm = null; const a = A(); if (!a || streakInfo(S.aid).freezes >= FREEZE_MAX) return render();
+    patchDoc(`athletes/${S.aid}`, {fzlog: (Array.isArray(a.fzlog) ? a.fzlog : []).concat([today()]).slice(-200)}); toast('Freeze added');
+  },
   streakopen(){ openSheet({kind:'streak'}); render(); },
   settarget(el){
     const id = el.dataset.v, k = el.dataset.k, v = +el.dataset.x, a = S.athletes[id]; if (!a) return;
@@ -1708,6 +1729,7 @@ function cleanDoc(p, v){
   if (/^athletes\/a[a-z0-9]{1,30}$/.test(p)) {
     const name = str(v.name, 30).trim(); if (!name) return null;
     return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, wgoal:isNum(v.wgoal,10,400) ? v.wgoal : null, wtarget:[0,1,3,7].includes(v.wtarget) ? v.wtarget : 0,
+      fzlog:Array.isArray(v.fzlog) ? v.fzlog.filter(d => DATE_RE.test(d)).slice(-200) : [],
       thist:Array.isArray(v.thist) ? v.thist.filter(x => x && (x.w === '0000-00-00' || DATE_RE.test(x.w)) && isNum(x.g,1,7) && isNum(x.wt,0,7)).slice(-100).map(x => ({w:x.w, g:Math.round(x.g), wt:Math.round(x.wt)})) : []};
   }
   const mm = p.match(/^athletes\/a[a-z0-9]{1,30}\/months\/(\d{4}-\d{2})$/);
@@ -1972,7 +1994,7 @@ document.addEventListener('click', ev => {
   const el = ev.target.closest('[data-act]'); if (!el) return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
   if (el.tagName === 'A') ev.preventDefault();
-  if (!/^(removeex|delath|delrt)$/.test(el.dataset.act)) S.confirm = null;
+  if (!/^(removeex|delath|delrt|addfreeze)$/.test(el.dataset.act)) S.confirm = null;
   fn(el, ev);
 });
 document.addEventListener('keydown', ev => {
