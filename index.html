@@ -261,8 +261,20 @@ textarea.txt{min-height:80px;resize:vertical}
 .cgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));row-gap:2px;max-width:560px;margin:0 auto}
 .cdow{text-align:center;font-size:13px;font-weight:600;color:var(--mute);padding-bottom:10px}
 .cday{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0 6px;min-width:0}
+.cday .band{width:100%;height:42px;display:flex;justify-content:center;align-items:center}
 .cday .n{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;font-size:20px;font-variant-numeric:tabular-nums}
 .cday.today .n{background:var(--blue);color:#fff;font-weight:600}
+/* Streak pills: one per week row, orange on streak days, faded on days of a missed week a freeze kept, blue on frozen days */
+.cday.sk-on .band{background:linear-gradient(180deg,#ff9a3c,#ff7a1a)}
+.cday.sk-soft .band{background:rgba(255,138,42,.28)}
+.cday.sk-frz .band{background:linear-gradient(180deg,#8fdcff,#4cbaff)}
+.cday.sk-on .n,.cday.sk-frz .n{color:#050708;font-weight:700}
+.cday.sk-soft .n{font-weight:600}
+.cday.sk-l .band{border-top-left-radius:21px;border-bottom-left-radius:21px}
+.cday.sk-r .band{border-top-right-radius:21px;border-bottom-right-radius:21px}
+.cday.today.sk .n{background:none;box-shadow:inset 0 0 0 2.5px #f2f5f6}
+.cday.today.sk-soft .n{color:#fff}
+.legend i.skl{width:16px;height:10px;border-radius:5px}
 .cday .dots{display:flex;gap:3px;height:7px}
 .cday .dots i{width:7px;height:7px;border-radius:50%;background:var(--c)}
 .calwrap{padding-bottom:calc(var(--navh,64px) + 96px)!important}
@@ -1017,7 +1029,8 @@ function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
 
 /* ---------- calendar ---------- */
 function vCal(){
-  const I = ix(S.aid), t = today(), cur = t.slice(0,7);
+  const I = ix(S.aid), t = today(), cur = t.slice(0,7), cal = streakInfo(S.aid).cal;
+  const SK_LBL = {on:'streak day', soft:'streak day, missed week kept by a freeze', frz:'freeze used'};
   // Months run from the first logged workout (at most 3 years back, at least 3 months) to 2 months ahead.
   const firstData = I.dates.length ? I.dates[0].slice(0,7) : cur;
   const ymAdd = (ym, n) => { const d = parseISO(ym+'-01'); d.setMonth(d.getMonth()+n); return iso(d).slice(0,7); };
@@ -1030,10 +1043,13 @@ function vCal(){
     const first = parseISO(ym+'-01'), lead = first.getDay(), nDays = new Date(first.getFullYear(), first.getMonth()+1, 0).getDate();
     let cells = dows.map(d => `<div class="cdow" aria-hidden="true">${d}</div>`).join('') + '<span></span>'.repeat(lead), n = 0;
     for (let i=1; i<=nDays; i++) {
-      const d = `${ym}-${pad(i)}`, cats = I.dayCats[d];
+      const d = `${ym}-${pad(i)}`, cats = I.dayCats[d], col = (lead + i - 1) % 7;
       if (cats) n++;
       const dots = cats ? CAT_ORDER.filter(c => cats[c]).slice(0,5).map(c => `<i style="--c:${CATS[c].c}"></i>`).join('') : '';
-      cells += `<button class="cday ${d===t?'today':''}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}${cats ? ', workout: ' + CAT_ORDER.filter(c => cats[c]).map(c => CATS[c].name).join(', ') : ''}"><span class="n">${i}</span><span class="dots">${dots}</span></button>`;
+      // A pill runs through the week row without a break while the streak lasts, rounding only where it starts or stops.
+      const k = cal[d], kPrev = i > 1 && col > 0 && cal[`${ym}-${pad(i-1)}`], kNext = i < nDays && col < 6 && cal[`${ym}-${pad(i+1)}`];
+      const sk = k ? ` sk sk-${k}${kPrev ? '' : ' sk-l'}${kNext ? '' : ' sk-r'}` : '';
+      cells += `<button class="cday${d===t?' today':''}${sk}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}${k ? ', ' + SK_LBL[k] : ''}${cats ? ', workout: ' + CAT_ORDER.filter(c => cats[c]).map(c => CATS[c].name).join(', ') : ''}"><span class="band"><span class="n">${i}</span></span><span class="dots">${dots}</span></button>`;
     }
     return `<section class="cmonth" id="m-${ym}" data-ym="${ym}" data-n="${n}"><h2 class="cmh">${first.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><div class="cgrid">${cells}</div></section>`;
   };
@@ -1043,6 +1059,7 @@ function vCal(){
   return `<div class="wrap calwrap">${banners()}${topbar('Calendar', '')}
     ${hasEarlier ? `<div style="text-align:center"><button class="tbtn" data-act="calmore">Show earlier months</button></div>` : ''}
     ${months.map(monthHTML).join('')}
+    ${Object.keys(cal).length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${[['on','Streak day','linear-gradient(180deg,#ff9a3c,#ff7a1a)'],['soft','Missed week, kept','rgba(255,138,42,.28)'],['frz','Freeze used','linear-gradient(180deg,#8fdcff,#4cbaff)']].filter(([k]) => Object.values(cal).includes(k)).map(([,l,c]) => `<span><i class="skl" style="background:${c}"></i>${l}</span>`).join('')}</div>` : ''}
     ${used.length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}
     <div class="calbar"><button class="icon-btn" data-act="cal" data-v="-1" aria-label="Previous month">${IC.back}</button><b id="calcount" aria-live="polite">${calCountText(nCur)}</b><button class="icon-btn" data-act="cal" data-v="1" aria-label="Next month">${IC.next}</button></div>
   </div>`;
@@ -1155,9 +1172,11 @@ function streakInfo(aid){
   // day with a workout or weigh-in) up to the last day the week's targets could still be met. A day counts once the
   // targets are reachable with only the days after it, so today's +1 is secured (logging today's workout earns it when
   // needed) and the number never has to go back down. Reachability only falls during a week, so counting stops there.
+  let wdStart = 0;
   const weekDays = (ws, tg, lastIdx, fresh) => {
-    let start = 0;
+    let start = 0; wdStart = 0;
     if (fresh) { start = -1; for (let i = 0; i <= lastIdx; i++) { const d = addDays(ws, i); if (wset.has(d) || bset.has(d)) { start = i; break; } } if (start < 0) return 0; }
+    wdStart = start;
     let n = 0, dw = 0, db = 0;
     for (let i = 0; i <= lastIdx; i++) {
       const d = addDays(ws, i); if (wset.has(d)) dw++; if (bset.has(d)) db++;
@@ -1171,10 +1190,10 @@ function streakInfo(aid){
   // fell out of reach, so the number never drops; a missed week without a freeze resets to 0 when the new week starts.
   if (firstDay) for (let w = sundayOf(firstDay); w < cur; w = addDays(w, 7)) {
     const tg = targetsFor(a, w), met = count(w, wset) >= tg.g && count(w, bset) >= tg.wt, live = w >= FREEZE_START;
-    const add = weekDays(w, tg, 6, streak === 0);
+    const add = weekDays(w, tg, 6, streak === 0), start = wdStart;
     if (live) takeAdds(addDays(w, 6));
-    if (met) { streak += add; onTarget++; if (live) earnRun++; if (live && earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done', add}); }
-    else if (live && streak > 0 && freezes > 0) { freezes--; streak += add; weeks.push({w, s:'frozen', add}); }
+    if (met) { streak += add; onTarget++; if (live) earnRun++; if (live && earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done', add, start}); }
+    else if (live && streak > 0 && freezes > 0) { freezes--; streak += add; weeks.push({w, s:'frozen', add, start}); }
     else { streak = 0; earnRun = 0; weeks.push({w, s:'missed', add:0}); }
     best = Math.max(best, streak);
   }
@@ -1186,10 +1205,22 @@ function streakInfo(aid){
   const freeWo = (wset.has(t) ? [] : [t]).concat(later), freeWi = (bset.has(t) ? [] : [t]).concat(later);
   const met = !needWo && !needWi, reachable = needWo <= freeWo.length && needWi <= freeWi.length;
   const state = met ? 'met' : reachable ? 'ontrack' : streak > 0 && freezes > 0 ? 'freeze' : streak > 0 ? 'losing' : 'none';
-  const curAdd = weekDays(cur, tg, dow, streak === 0);
+  const curAdd = weekDays(cur, tg, dow, streak === 0), curStart = wdStart;
   const days = streak + curAdd;
   best = Math.max(best, days);
-  const v = {days, best, freezes, state, curAdd, onTarget: onTarget + (met ? 1 : 0), weeks, tg, wo, wi, needWo, needWi, freeWo, freeWi, cur, dow, hasData: !!firstDay};
+  // Calendar marks, by date: 'on' streak day, 'soft' counted day of a missed week a freeze kept, 'frz' frozen day.
+  // A missed week without a freeze ended the streak, so it shows nothing.
+  const cal = {};
+  const mark = (ws, from, n, k) => { for (let i = from; i < from + n && i < 7; i++) cal[addDays(ws, i)] = k; };
+  for (const x of weeks) {
+    if (x.s === 'done') mark(x.w, x.start, x.add, 'on');
+    else if (x.s === 'frozen') { mark(x.w, x.start, x.add, 'soft'); mark(x.w, x.start + x.add, 7 - x.start - x.add, 'frz'); }
+  }
+  // This week: days counted so far; once out of reach, a freeze covers the rest up to today.
+  const keep = state === 'met' || state === 'ontrack';
+  mark(cur, curStart, curAdd, keep ? 'on' : 'soft');
+  if (state === 'freeze') mark(cur, curStart + curAdd, dow + 1 - curStart - curAdd, 'frz');
+  const v = {days, best, freezes, state, curAdd, cal, onTarget: onTarget + (met ? 1 : 0), weeks, tg, wo, wi, needWo, needWi, freeWo, freeWi, cur, dow, hasData: !!firstDay};
   SC[aid] = {key, v};
   return v;
 }
