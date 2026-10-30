@@ -269,7 +269,9 @@ textarea.txt{min-height:80px;resize:vertical}
 .cday.sk .band::before{content:'';position:absolute;top:0;bottom:0;left:0;right:0}
 .cday.sk-l .band::before{left:calc(50% - 21px);border-top-left-radius:21px;border-bottom-left-radius:21px}
 .cday.sk-r .band::before{right:calc(50% - 21px);border-top-right-radius:21px;border-bottom-right-radius:21px}
-.cday.sk-on .band::before{background:linear-gradient(180deg,#ff9a3c,#ff7a1a)}
+.cday.sk-on .band::before{background:linear-gradient(180deg,#ff5a2e 0%,#ff8a1f 55%,#ffb21a 100%);border:0 solid #ffc93c;border-top-width:3px;border-bottom-width:3px}
+.cday.sk-on.sk-l .band::before{border-left-width:3px}
+.cday.sk-on.sk-r .band::before{border-right-width:3px}
 .cday.sk-soft .band::before{background:rgba(255,138,42,.28)}
 .cday.sk-frz .band::before{background:linear-gradient(180deg,#8fdcff,#4cbaff)}
 .cday.sk-on .n,.cday.sk-frz .n{color:#050708;font-weight:700}
@@ -1068,7 +1070,7 @@ function vCal(){
   return `<div class="wrap calwrap">${banners()}${topbar('Calendar', '')}
     ${hasEarlier ? `<div style="text-align:center"><button class="tbtn" data-act="calmore">Show earlier months</button></div>` : ''}
     ${months.map(monthHTML).join('')}
-    ${Object.keys(cal).length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${[['on','Perfect week','linear-gradient(180deg,#ff9a3c,#ff7a1a)'],['soft','Streak day','rgba(255,138,42,.28)'],['frz','Freeze used','linear-gradient(180deg,#8fdcff,#4cbaff)']].filter(([k]) => Object.values(cal).includes(k)).map(([,l,c]) => `<span><i class="skl" style="background:${c}"></i>${l}</span>`).join('')}</div>` : ''}
+    ${Object.keys(cal).length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${[['on','Perfect week','linear-gradient(180deg,#ff5a2e,#ff8a1f 55%,#ffb21a);border:1.5px solid #ffc93c'],['soft','Streak day','rgba(255,138,42,.28)'],['frz','Freeze used','linear-gradient(180deg,#8fdcff,#4cbaff)']].filter(([k]) => Object.values(cal).includes(k)).map(([,l,c]) => `<span><i class="skl" style="background:${c}"></i>${l}</span>`).join('')}</div>` : ''}
     ${used.length ? `<div class="legend" style="justify-content:center;margin:8px 0 4px">${CAT_ORDER.filter(c => used.includes(c)).map(c => `<span><i style="--c:${CATS[c].c}"></i>${CATS[c].name}</span>`).join('')}</div>` : ''}
     <div class="calbar"><button class="icon-btn" data-act="cal" data-v="-1" aria-label="Previous month">${IC.back}</button><b id="calcount" aria-live="polite">${calCountText(nCur)}</b><button class="icon-btn" data-act="cal" data-v="1" aria-label="Next month">${IC.next}</button></div>
   </div>`;
