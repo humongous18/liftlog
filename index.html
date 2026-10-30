@@ -78,8 +78,9 @@ h3{font-size:15px;font-weight:600;color:var(--mute)}
 /* header */
 .top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 16px;flex-wrap:wrap;margin-bottom:22px}
 .top .t{min-width:0}
-.who{display:inline-flex;background:var(--tile);border-radius:999px;padding:3px}
-.who button{height:34px;padding:0 14px;border-radius:999px;font-weight:600;font-size:15px;color:var(--mute)}
+.who{display:inline-flex;background:var(--tile);border-radius:999px;padding:3px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.who::-webkit-scrollbar{display:none}
+.who button{flex:none;white-space:nowrap;height:34px;padding:0 14px;border-radius:999px;font-weight:600;font-size:15px;color:var(--mute)}
 .who button.on{background:var(--fg);color:var(--bg)}
 .banner{padding:12px 14px;border-radius:var(--r-btn);background:#2a1a10;color:#ffd7b0;font-size:15px;margin-bottom:16px}
 
@@ -248,6 +249,7 @@ textarea.txt{min-height:80px;resize:vertical}
 .hw.now{background:transparent;box-shadow:inset 0 0 0 2px var(--fg)}
 .fzmore{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:36px;opacity:.75}
 .link.small{font-size:13px}
+.fzmore .link{min-height:44px;padding:0 8px}
 .sk-mini{display:inline-flex;align-items:center;gap:4px}
 .sk-mini svg{width:18px;height:18px}
 .sk-mini b{font-family:var(--f-num);font-size:20px}
@@ -776,7 +778,7 @@ function shBw(){
   const rows = list.slice().reverse().slice(0, 30).map((e, i, arr) => { const prev = list[list.length - 2 - i]; const dd = prev ? toU(e.kg) - toU(prev.kg) : null;
     return `<button class="bwrow" data-act="bwedit" data-v="${esc(e.d)}" aria-label="Edit ${esc(fmtDateLong(e.d))}"><span class="dt">${esc(fmtDateLong(e.d))}${e.d === t ? ' · Today' : ''}</span><span><b>${f1w(toU(e.kg))}</b><span class="muted small"> ${wUnit(u)}</span></span><span class="ch" style="${dd != null && goalU != null && Math.abs(toU(e.kg) - goalU) < Math.abs(toU(prev.kg) - goalU) ? 'color:var(--green)' : ''}">${dd == null ? '' : (dd >= 0.05 ? '+' : dd <= -0.05 ? '−' : '') + f1w(Math.abs(dd))}</span></button>`; }).join('');
   return sheetTop('Weight Change', athleteIds().length > 1 ? A().name : '') + `<div class="sh-body">
-    <div class="figs three"><div class="fig"><b>${cur ? f1w(curU) : '–'}</b><span>${wUnit(u)} now</span></div><div class="fig"><b style="${toward ? 'color:var(--green)' : ''}">${ch == null ? '–' : (ch <= 0 ? '−' : '+') + f1w(Math.abs(ch))}</b><span>${wUnit(u)} ${BW_RANGE_TEXT[rk]}</span></div><div class="fig"><b>${goalU != null && cur ? f1w(Math.abs(curU - goalU)) : '–'}</b><span>${wUnit(u)} to goal</span></div></div>
+    <div class="figs three"><div class="fig"><b>${cur ? f1w(curU) : '–'}</b><span>${wUnit(u)} now</span></div><div class="fig"><b style="${toward ? 'color:var(--green)' : ''}">${ch == null ? '–' : (Math.abs(ch) < 0.05 ? '' : ch < 0 ? '−' : '+') + f1w(Math.abs(ch))}</b><span>${wUnit(u)} ${BW_RANGE_TEXT[rk]}</span></div><div class="fig"><b>${goalU != null && cur ? f1w(Math.abs(curU - goalU)) : '–'}</b><span>${wUnit(u)} to goal</span></div></div>
     <div class="rowsb"><div class="chips" role="group" aria-label="Range">${chips}</div><button class="chip ${fit?'on':''}" data-act="bwfit" aria-pressed="${fit}" title="Zoom the chart to your weights">Fit</button></div>
     <div class="bwchart">${chart}${below}</div>
     <div class="goalrow"><span class="dash">${goalU != null ? `${DASH()}Goal <b>${f1w(goalU)}</b> ${wUnit(u)}` : '<span class="muted">No goal set</span>'}</span><button class="link" data-act="bwgoal">${goalU != null ? 'Edit goal' : 'Set goal'}</button></div>
@@ -906,7 +908,7 @@ function banners(){ return S.storeOk ? '' : `<div class="banner">This phone isn'
 function vOnboard(){
   return `<div class="wrap">${banners()}<div style="max-width:460px;margin:8vh auto 0" class="form">
     <h1>Liftlog</h1>
-    <p class="muted">Log every set, then see your strain and readiness. Add a second profile if you share this phone with a training partner.</p>
+    <p class="muted">Log every set and track your progress. Add a second profile if you share this phone.</p>
     <label class="field"><span>Your name</span><input class="txt" id="ob-1" maxlength="30" autocomplete="given-name"></label>
     <label class="field"><span>Second profile (optional)</span><input class="txt" id="ob-2" maxlength="30" autocomplete="off"></label>
     <label class="field"><span>Weights in</span><select class="txt" id="ob-u"><option value="lb">Pounds</option><option value="kg">Kilograms</option></select></label>
@@ -933,6 +935,7 @@ function vTodayPlain(){
   const maxS = Math.max(1, ...week.map(d => I.dayStats[d] ? I.dayStats[d].sets : 0));
   const strip = week.map(d => { const n = I.dayStats[d] ? I.dayStats[d].sets : 0, future = d > t; return `<button class="wd ${d===t?'today':''} ${future?'future':''}" data-act="goto" data-v="${d}" aria-label="${fmtDateLong(d)}, ${n} sets"><span class="s">${future ? '' : n || '–'}</span><span class="col"><i style="height:${n/maxS*100}%"></i></span><span class="l">${parseISO(d).toLocaleDateString(undefined,{weekday:'narrow'})}</span></button>`; }).join('');
   const prs = I.prs.slice(-5).reverse();
+  const ms = milestoneDue(S.aid); if (ms) setTimeout(() => toast(`${ms}-day streak!`, 'fire'), 400);
   return `<div class="wrap">${banners()}${topbar('Today', parseISO(t).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}))}
     ${streakCardHTML()}
     <section class="tile" style="margin-top:12px"><div class="tile-h"><h2>This week</h2><span class="wkgoal"><b>${wk.length}</b>/${goal} workouts</span></div><div class="week">${strip}</div><p class="muted small">Bars show sets per day.</p></section>
@@ -1087,12 +1090,12 @@ function vTrends(){
     const w8 = []; for (let i=7; i>=0; i--) w8.push(addDays(weekStart(t), -7*i));
     const wVol = (J, w) => { let v = 0; for (let i=0;i<7;i++) { const x = J.dayStats[addDays(w,i)]; if (x) v += x.vol; } return u==='lb' ? v/LB : v; };
     const series = ids.map(id => { const J = ix(id); return {name:S.athletes[id].name, color:S.athletes[id].color||COLORS[0], values:w8.map(w => sc ? weekStrain(J, w, '0000-00-00', t) : wVol(J, w))}; });
-    const ws = weekStart(t);
-    const rows = ids.map(id => { const J = ix(id), a = S.athletes[id]; const dd = J.dates.filter(d => d >= ws && d <= t); const s = dd.reduce((x,d) => x + J.dayStrain[d], 0); const R = sc ? readiness(J,t) : null;
+    const ws = sundayOf(t);
+    const rows = ids.map(id => { const J = ix(id), a = Object.assign({}, S.athletes[id], {goal: targetsFor(S.athletes[id], sundayOf(t)).g}); const dd = J.dates.filter(d => d >= ws && d <= t); const s = dd.reduce((x,d) => x + J.dayStrain[d], 0); const R = sc ? readiness(J,t) : null;
       const right = sc ? `<div style="text-align:right"><div class="num" style="font-size:22px;font-weight:700;color:var(--link)">${weekStrain(J, ws, '0000-00-00', t).toFixed(1)}</div><div class="meta">avg strain</div></div><div style="text-align:right;min-width:62px"><div class="num" style="font-size:22px;font-weight:700;color:${R ? recColor(R.score) : 'var(--mute)'}">${R ? R.score+'%' : '–'}</div><div class="meta">readiness</div></div>`
         : `<div style="text-align:right"><div class="num" style="font-size:22px;font-weight:700">${dd.reduce((x,d) => x + J.dayStats[d].sets, 0)}</div><div class="meta">sets</div></div><div style="text-align:right;min-width:70px"><div class="num" style="font-size:22px;font-weight:700">${fmtVol(dd.reduce((x,d) => x + J.dayStats[d].vol, 0), u)}</div><div class="meta">${wUnit(u)}</div></div>`;
       return `<div class="lrow"><div class="grow"><div style="color:${esc(a.color)};font-weight:600">${esc(a.name)}</div><div class="meta">${dd.length} of ${a.goal||4} sessions</div></div>${right}</div>`; }).join('');
-    team = `<section class="tile span2"><h2>You two this week</h2><div class="list">${rows}</div><h3>${sc ? 'Average daily strain by week' : `Weekly volume (${wUnit(u)})`}</h3>${chartSlot({type:'bar', label:'Weekly totals by person', labels:w8.map(w => xDate(msOf(w))), series, fmt:sc ? (v => fmtNum(v,1)) : (v => v >= 1000 ? fmtNum(v/1000,1)+'k' : fmtNum(v,0)), h:170})}</section>`;
+    team = `<section class="tile span2"><h2>${ids.length > 2 ? 'Everyone' : 'You two'} this week</h2><div class="list">${rows}</div><h3>${sc ? 'Average daily strain by week' : `Weekly volume (${wUnit(u)})`}</h3>${chartSlot({type:'bar', label:'Weekly totals by person', labels:w8.map(w => xDate(msOf(w))), series, fmt:sc ? (v => fmtNum(v,1)) : (v => v >= 1000 ? fmtNum(v/1000,1)+'k' : fmtNum(v,0)), h:170})}</section>`;
   }
   return `<div class="wrap">${banners()}${topbar('Trends', A().name)}
     <div class="scroller" style="margin-bottom:18px">${chips}</div>
@@ -1149,14 +1152,15 @@ function streakInfo(aid){
   if (firstDay) for (let w = sundayOf(firstDay); w < cur; w = addDays(w, 7)) {
     const tg = targetsFor(a, w), met = count(w, wset) >= tg.g && count(w, bset) >= tg.wt, live = w >= FREEZE_START;
     if (live) takeAdds(addDays(w, 6));
-    if (met) { streak += 7; onTarget++; earnRun++; if (live && earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done'}); }
+    if (met) { streak += 7; onTarget++; if (live) earnRun++; if (live && earnRun % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) freezes++; weeks.push({w, s:'done'}); }
     else if (live && streak > 0 && freezes > 0) { freezes--; weeks.push({w, s:'frozen'}); }
     else { streak = 0; earnRun = 0; weeks.push({w, s:'missed'}); }
     best = Math.max(best, streak);
   }
   takeAdds(addDays(cur, 6));
   const tg = targetsFor(a, cur), dow = parseISO(t).getDay();
-  const wo = count(cur, wset), wi = count(cur, bset), needWo = Math.max(0, tg.g - wo), needWi = Math.max(0, tg.wt - wi);
+  const countToday = set => { let n = 0; for (let i = 0; i <= dow; i++) if (set.has(addDays(cur, i))) n++; return n; };
+  const wo = countToday(wset), wi = countToday(bset), needWo = Math.max(0, tg.g - wo), needWi = Math.max(0, tg.wt - wi);
   const later = []; for (let i = dow + 1; i < 7; i++) later.push(addDays(cur, i));
   const freeWo = (wset.has(t) ? [] : [t]).concat(later), freeWi = (bset.has(t) ? [] : [t]).concat(later);
   const met = !needWo && !needWi, reachable = needWo <= freeWo.length && needWi <= freeWi.length;
@@ -1178,7 +1182,7 @@ function streakNudge(si){
   if (si.state === 'met') return 'Week complete. Streak is safe.';
   if (si.state === 'freeze') return "This week's target is out of reach. A freeze will keep your streak.";
   if (si.state === 'losing') return 'Target out of reach this week. Your streak resets Sunday.';
-  if (si.state === 'none' && !si.wo && !si.wi && si.needWo > si.freeWo.length) return 'Start a streak next week.';
+  if (si.state === 'none') return 'Start a streak next week.';
   const parts = [part(si.needWo, si.freeWo, 'work out', si.wo), part(si.needWi, si.freeWi, 'weigh in', si.wi)].filter(Boolean);
   const txt = parts.join(', and ');
   return txt.charAt(0).toUpperCase() + txt.slice(1) + ` to ${goalWord}.`;
@@ -1202,14 +1206,14 @@ function shStreak(){
   const ids = athleteIds();
   let together = '';
   if (ids.length > 1) {
-    const all = ids.map(id => streakInfo(id));
-    if (all.every(x => x.hasData)) {
+    const inIds = ids.filter(id => streakInfo(id).hasData), all = inIds.map(id => streakInfo(id));
+    if (all.length > 1 && inIds.includes(S.aid)) {
       const map = all.map(x => Object.fromEntries(x.weeks.map(w => [w.w, w.s])));
       let n = 0; for (let w = addDays(si.cur, -7); ; w = addDays(w, -7)) { if (map.every(m => m[w] === 'done')) n++; else break; }
       const tDays = n * 7 + (all.every(x => x.state === 'met') ? si.dow + 1 : 0);
       together = `<section class="tile"><div class="tile-h"><h2>Together</h2><span class="sk-mini"><span style="color:#ff8a2a">${IC.flame}</span><b>${tDays}</b> days</span></div>
-        <div class="list">${ids.map((id, i) => `<div class="lrow"><div class="grow"><div style="font-weight:600;color:${esc(S.athletes[id].color)}">${esc(S.athletes[id].name)}</div><div class="meta">${all[i].wo}/${all[i].tg.g} workouts${all[i].tg.wt ? ` · ${all[i].wi}/${all[i].tg.wt} weigh-ins` : ''}</div></div><span class="sk-mini"><span style="color:${all[i].days ? '#ff8a2a' : '#5c676e'}">${IC.flame}</span><b>${all[i].days}</b></span></div>`).join('')}</div>
-        <p class="muted small">Days you've both been on target.</p></section>`;
+        <div class="list">${inIds.map((id, i) => `<div class="lrow"><div class="grow"><div style="font-weight:600;color:${esc(S.athletes[id].color)}">${esc(S.athletes[id].name)}</div><div class="meta">${all[i].wo}/${all[i].tg.g} workouts${all[i].tg.wt ? ` · ${all[i].wi}/${all[i].tg.wt} weigh-ins` : ''}</div></div><span class="sk-mini"><span style="color:${all[i].days ? '#ff8a2a' : '#5c676e'}">${IC.flame}</span><b>${all[i].days}</b></span></div>`).join('')}</div>
+        <p class="muted small">Days you've ${all.length > 2 ? 'all' : 'both'} been on target.</p></section>`;
     }
   }
   return sheetTop('Streak', ids.length > 1 ? a.name : '') + `<div class="sh-body">
@@ -1234,12 +1238,18 @@ function shStreak(){
 }
 // Celebrate when a save completes this week's targets or passes a milestone.
 function streakSnapshot(aid){ const si = streakInfo(aid); return {state:si.state, days:si.days}; }
+// The highest milestone already celebrated is kept per profile, so one reached overnight is shown the next time
+// Today opens, and none is shown twice. After a reset it drops back so the same milestones can be earned again.
+function milestoneDue(aid){
+  const si = streakInfo(aid), key = 'ms.' + aid, last = pref.get(key, 0);
+  const reached = [0].concat(MILESTONES).filter(m => m <= si.days).pop();
+  if (reached < last) { pref.set(key, reached); return null; }
+  if (reached > last) { pref.set(key, reached); return reached; }
+  return null;
+}
 function celebrate(aid, before, delay){
-  const si = streakInfo(aid);
-  let msg = null;
-  const m = MILESTONES.filter(x => before.days < x && si.days >= x).pop();
-  if (m) msg = `${m}-day streak!`;
-  else if (before.state !== 'met' && si.state === 'met') msg = `Week complete · ${si.days}-day streak`;
+  const si = streakInfo(aid), m = milestoneDue(aid);
+  const msg = m ? `${m}-day streak!` : before.state !== 'met' && si.state === 'met' ? `Week complete · ${si.days}-day streak` : null;
   if (msg) setTimeout(() => toast(msg, 'fire'), delay || 0);
 }
 
@@ -1289,7 +1299,8 @@ function vMore(){
 }
 function freezeHTML(){
   const si = streakInfo(S.aid), full = si.freezes >= FREEZE_MAX;
-  return `<div class="fzmore"><span class="muted small">Streak freezes: ${si.freezes} of ${FREEZE_MAX}</span>${full ? '' : `<button class="link small" data-act="addfreeze">${S.confirm === 'addfreeze' ? 'Tap again to add' : 'Add a freeze'}</button>`}</div>`;
+  const who = athleteIds().length > 1 ? `${esc(A().name)}'s streak freezes` : 'Streak freezes';
+  return `<div class="fzmore"><span class="muted small">${who}: ${si.freezes} of ${FREEZE_MAX}</span>${full ? '' : `<button class="link small" data-act="addfreeze">${S.confirm === 'addfreeze' ? 'Tap again to add' : 'Add a freeze'}</button>`}</div>`;
 }
 function notifyHTML(){
   if (!('Notification' in window)) return isIOS() && !standalone() ? '<p class="muted">Install Liftlog to turn on alerts.</p>' : '<p class="muted">Not available in this browser.</p>';
@@ -1728,9 +1739,9 @@ function cleanDoc(p, v){
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   if (/^athletes\/a[a-z0-9]{1,30}$/.test(p)) {
     const name = str(v.name, 30).trim(); if (!name) return null;
-    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, wgoal:isNum(v.wgoal,10,400) ? v.wgoal : null, wtarget:[0,1,3,7].includes(v.wtarget) ? v.wtarget : 0,
-      fzlog:Array.isArray(v.fzlog) ? v.fzlog.filter(d => DATE_RE.test(d)).slice(-200) : [],
-      thist:Array.isArray(v.thist) ? v.thist.filter(x => x && (x.w === '0000-00-00' || DATE_RE.test(x.w)) && isNum(x.g,1,7) && isNum(x.wt,0,7)).slice(-100).map(x => ({w:x.w, g:Math.round(x.g), wt:Math.round(x.wt)})) : []};
+    return {name, color:COLORS.includes(v.color) ? v.color : COLORS[0], unit:v.unit === 'lb' ? 'lb' : 'kg', rest:isNum(v.rest,0,600) ? Math.round(v.rest) : 90, goal:isNum(v.goal,1,7) ? Math.round(v.goal) : 4, created:isNum(v.created,0,1e14) ? v.created : Date.now(), me:v.me === true, src:v.src === 'import' ? 'import' : undefined, wgoal:isNum(v.wgoal,10,400) ? v.wgoal : null, wtarget:[0,1,3,7].includes(v.wtarget) ? v.wtarget : 0,
+      fzlog:Array.isArray(v.fzlog) ? v.fzlog.filter(d => typeof d === 'string' && DATE_RE.test(d)).sort().slice(-200) : [],
+      thist:Array.isArray(v.thist) ? v.thist.filter(x => x && typeof x.w === 'string' && (x.w === '0000-00-00' || DATE_RE.test(x.w)) && isNum(x.g,1,7) && isNum(x.wt,0,7)).sort((p, q) => p.w < q.w ? -1 : p.w > q.w ? 1 : 0).slice(-100).map(x => ({w:x.w, g:Math.round(x.g), wt:Math.round(x.wt)})) : []};
   }
   const mm = p.match(/^athletes\/a[a-z0-9]{1,30}\/months\/(\d{4}-\d{2})$/);
   if (mm) {
@@ -2021,7 +2032,7 @@ document.addEventListener('change', ev => {
   else if (k === 'bkreplace' && el.files && el.files[0]) loadBackup(el.files[0], 'replace');
   if (el.type === 'file') el.value = '';
 });
-function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; if (S.sheet) clearSheet(); if (S.view === 'calendar') S.calJump = true; render(); if (S.view !== 'calendar') window.scrollTo(0,0); }
+function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; S.confirm = null; if (S.sheet) clearSheet(); if (S.view === 'calendar') S.calJump = true; render(); if (S.view !== 'calendar') window.scrollTo(0,0); }
 window.addEventListener('hashchange', route);
 let rzT; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(drawCharts, 150); });
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.view === 'more') render(); });

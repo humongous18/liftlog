@@ -1,7 +1,7 @@
 {
   "name": "Liftlog",
   "short_name": "Liftlog",
-  "description": "Workout log with strain and readiness scores.",
+  "description": "Workout log with streaks and weight tracking.",
   "start_url": "./#today",
   "scope": "./",
   "display": "standalone",
