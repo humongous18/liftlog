@@ -40,17 +40,31 @@ object RestTimer {
         )
     }
 
+    /**
+     * Called by the page whenever its timer changes. endMs = 0: cleared. endMs in the future: running.
+     * endMs in the past: the rest just ended — notify now if Liftlog isn't on screen (the page's own
+     * timer often notices before the alarm fires, and must not cancel it).
+     */
     fun set(ctx: Context, endMs: Long, totalMs: Long, exercise: String) {
         val now = System.currentTimeMillis()
-        prefs(ctx).edit().putLong("end", endMs).putLong("total", totalMs).putString("ex", exercise).apply()
+        val p = prefs(ctx)
+        p.edit().putLong("end", endMs).putLong("total", totalMs).putString("ex", exercise).apply()
         val nm = ctx.getSystemService(NotificationManager::class.java)
-        nm.cancel(ID_DONE)
-        if (endMs > now) {
-            arm(ctx, endMs)
-            if (!MainActivity.foreground) showOngoing(ctx) else hideOngoing(ctx)
-        } else {
-            cancelAlarm(ctx)
-            hideOngoing(ctx)
+        when {
+            endMs <= 0L -> {
+                cancelAlarm(ctx)
+                hideOngoing(ctx)
+                nm.cancel(ID_DONE)
+            }
+            endMs > now -> {
+                nm.cancel(ID_DONE)
+                arm(ctx, endMs)
+                if (!MainActivity.foreground) showOngoing(ctx) else hideOngoing(ctx)
+            }
+            else -> {
+                hideOngoing(ctx)
+                if (!MainActivity.foreground) notifyDone(ctx)
+            }
         }
     }
 
@@ -113,11 +127,19 @@ object RestTimer {
     }
 
     fun onAlarm(ctx: Context) {
+        val end = prefs(ctx).getLong("end", 0)
+        // Cleared, or moved later (the alarm for the new end is already armed).
+        if (end == 0L || System.currentTimeMillis() < end - 2000) return
+        hideOngoing(ctx)
+        if (!MainActivity.foreground) notifyDone(ctx)
+    }
+
+    /** Posts "Rest over" once per rest (the alarm and the page may both report the end). */
+    private fun notifyDone(ctx: Context) {
         val p = prefs(ctx)
         val end = p.getLong("end", 0)
-        hideOngoing(ctx)
-        // Stale alarm (timer was changed or cleared) or the user is looking at Liftlog (it buzzes itself).
-        if (end == 0L || System.currentTimeMillis() < end - 2000 || MainActivity.foreground || !canPost(ctx)) return
+        if (end == 0L || p.getLong("notified", 0) == end || !canPost(ctx)) return
+        p.edit().putLong("notified", end).apply()
         val ex = p.getString("ex", "").orEmpty()
         val n = Notification.Builder(ctx, CH_DONE)
             .setSmallIcon(R.drawable.ic_stat_barbell)
@@ -130,6 +152,13 @@ object RestTimer {
             .setContentIntent(openApp(ctx))
             .build()
         ctx.getSystemService(NotificationManager::class.java).notify(ID_DONE, n)
+        // Buzz directly as well, in case the channel's vibration was turned off or the phone
+        // only vibrates for some channels.
+        try {
+            val v = ctx.getSystemService(android.os.Vibrator::class.java)
+            v?.vibrate(android.os.VibrationEffect.createWaveform(BUZZ, -1))
+        } catch (_: Throwable) {
+        }
     }
 }
 

@@ -1954,7 +1954,8 @@ const BUZZ = [500, 250, 500]; // two medium vibrations
 function buzz(){ try { if (NA) NA.vibrate(JSON.stringify(BUZZ)); else navigator.vibrate && navigator.vibrate(BUZZ); } catch {} }
 // The rest timer is kept as an end time (not a countdown), so it stays right after the phone sleeps or the app is closed and reopened.
 let restT = null;
-const saveTimer = () => { pref.set('timer', S.timer); if (NA) { try { const t = S.timer; NA.restTimer(t && !t.done ? t.end : 0, t ? t.total : 0, (t && t.ex) || ''); } catch {} } };
+// In the Android app the end time is passed even once the rest is over (done): the app then shows "Rest over" itself. 0 means the timer was cleared.
+const saveTimer = () => { pref.set('timer', S.timer); if (NA) { try { const t = S.timer; NA.restTimer(t ? t.end : 0, t ? t.total : 0, (t && t.ex) || ''); } catch {} } };
 function armRest(){ clearTimeout(restT); if (S.timer && !S.timer.done) restT = setTimeout(tick, Math.max(0, S.timer.end - Date.now()) + 30); }
 function startRest(sec, exName){ const s = sec ?? (A() ? (A().rest ?? 90) : 90); if (!s) return; S.timer = {end:Date.now() + s*1000, total:s*1000, done:false, ex:exName || null}; saveTimer(); armRest(); askNotify(false); tick(); }
 function stopRest(){ S.timer = null; saveTimer(); clearTimeout(restT); stopBgLoop(); clearRestNote(); tick(); }
@@ -2210,6 +2211,21 @@ async function init(){
 }
 init();
 window.__liftlogResume = () => { if (S.view === 'more') render(); };
+// Android app: open files through the system picker instead of <input type=file>, then hand the file to
+// the same change handlers (backup restore/merge, FitNotes and Cronometer imports).
+if (NA) document.addEventListener('click', e => {
+  const lab = e.target && e.target.closest && e.target.closest('label[for]'); if (!lab) return;
+  const inp = document.getElementById(lab.htmlFor); if (!inp || inp.type !== 'file') return;
+  e.preventDefault(); e.stopPropagation();
+  try { NA.pickFile(inp.id, inp.accept || ''); } catch {}
+}, true);
+window.__liftlogPicked = (id, name, type, text) => {
+  const inp = document.getElementById(id); if (!inp) return;
+  try {
+    const dt = new DataTransfer(); dt.items.add(new File([text], name || 'file', {type: type || 'application/octet-stream'}));
+    inp.files = dt.files; inp.dispatchEvent(new Event('change', {bubbles: true}));
+  } catch { toast("Couldn't open that file.", 'err'); }
+};
 if (!NA && 'serviceWorker' in navigator && location.protocol === 'https:') window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 })();
 </script>

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.ValueCallback
@@ -23,6 +24,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONObject
 
 /**
  * Liftlog's web app (bundled in assets/www) running in a WebView, plus a small native bridge
@@ -61,6 +63,27 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
         } catch (t: Throwable) {
             Toast.makeText(this, "Couldn't save: ${t.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private var pickTarget: String? = null
+
+    private val openFile = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val id = pickTarget
+        pickTarget = null
+        val uri = r.data?.data
+        if (r.resultCode != RESULT_OK || uri == null || id == null) return@registerForActivityResult
+        try {
+            var name = "file"
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) name = c.getString(0) ?: name
+            }
+            val type = contentResolver.getType(uri) ?: ""
+            val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?: error("empty")
+            js("window.__liftlogPicked && window.__liftlogPicked(${JSONObject.quote(id)}, ${JSONObject.quote(name)}, ${JSONObject.quote(type)}, ${JSONObject.quote(text)})")
+        } catch (t: Throwable) {
+            Toast.makeText(this, "Couldn't read that file", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -105,7 +128,8 @@ class MainActivity : ComponentActivity() {
             @Suppress("DEPRECATION")
             databaseEnabled = true
             allowFileAccess = false
-            allowContentAccess = false
+            // Needed for files chosen through <input type=file> (content:// URIs).
+            allowContentAccess = true
             setSupportZoom(false)
             builtInZoomControls = false
             mediaPlaybackRequiresUserGesture = false
@@ -191,6 +215,21 @@ class MainActivity : ComponentActivity() {
         } catch (t: Throwable) {
             pendingSaveText = null
             Toast.makeText(this, "No app available to save files", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun pickFile(inputId: String, accept: String) {
+        pickTarget = inputId
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            // Backups (.json) and CSV exports often have generic MIME types, so allow any file.
+            type = "*/*"
+        }
+        try {
+            openFile.launch(intent)
+        } catch (t: Throwable) {
+            pickTarget = null
+            Toast.makeText(this, "No file picker available", Toast.LENGTH_LONG).show()
         }
     }
 

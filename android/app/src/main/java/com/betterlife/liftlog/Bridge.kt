@@ -58,7 +58,13 @@ class Bridge(private val activity: MainActivity) {
         activity.runOnUiThread { activity.saveFile(name, mime, text) }
     }
 
-    /** endMs = 0 clears the timer. */
+    /** Opens the system file picker; the file's text comes back via `__liftlogPicked(id, name, type, text)`. */
+    @JavascriptInterface
+    fun pickFile(inputId: String, accept: String) {
+        activity.runOnUiThread { activity.pickFile(inputId, accept) }
+    }
+
+    /** endMs = 0 clears the timer; an end time in the past means the rest is over. */
     @JavascriptInterface
     fun restTimer(endMs: Double, totalMs: Double, exercise: String) {
         RestTimer.set(ctx, endMs.toLong(), totalMs.toLong(), exercise)
