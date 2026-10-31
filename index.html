@@ -958,6 +958,7 @@ function vTodayPlain(){
     ${streakCardHTML()}
     <section class="tile" style="margin-top:12px"><div class="tile-h"><h2>This week</h2><span class="wkgoal"><b>${wk.length}</b>/${goal} workouts</span></div><div class="week">${strip}</div><p class="muted small">Bars show sets per day.</p></section>
     <button class="btn primary wide" style="margin-top:14px" data-act="gotoToday">${nSets ? `Continue workout · ${nSets} sets` : 'Start workout'}</button>
+    ${ubTodayHTML()}
     <div style="margin-top:16px">${bwCardHTML()}</div>
   </div>`;
 }
@@ -1024,6 +1025,7 @@ function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
     ${entries.length && ds ? `<div class="dayline">${scoresOn() ? `<span class="st"><b>${st.toFixed(1)}</b> strain</span>` : ''}<span><b>${ds.sets}</b> sets</span><span><b>${fmtVol(ds.vol,u)}</b> ${wUnit(u)}</span>${ds.dur ? `<span><b>${Math.round(ds.dur)}</b> min</span>` : ''}</div>` : '<div style="height:12px"></div>'}
     <div class="entries">${list}</div>
     <div style="margin-top:14px"><button class="btn primary wide" data-act="addex">${IC.plus} Add exercise</button></div>
+    ${ubLogHTML(d, ds)}
     <div class="actions"><button class="tbtn" data-act="copy">${IC.copy} Copy a workout</button><button class="tbtn" data-act="routines">${IC.list} Routines</button>${!scoresOn() && entries.length && !(day.note || S.noteOpen === d) ? `<button class="tbtn" data-act="addnote">Add note</button>` : ''}${d === today() ? '' : `<button class="tbtn" data-act="gotoToday">Back to today</button>`}</div>
     ${!scoresOn() && entries.length && (day.note || S.noteOpen === d) ? `<label class="field" style="margin-top:12px"><span>Workout note</span><textarea class="txt" id="wnote" data-ch="wnote" maxlength="600" rows="2">${esc(day.note||'')}</textarea></label>` : ''}
     ${entries.length && scoresOn() ? `<section class="tile" style="margin-top:14px"><h2>How hard was it?</h2>
@@ -1348,6 +1350,7 @@ function vMore(){
     <div class="section"><h2>${ids.length > 1 ? 'Profiles' : 'Profile'}</h2><div class="grid two">${prof}
       ${ids.length < 4 ? `<section class="tile"><label class="field"><span>Add profile</span><div class="row"><input class="txt" id="new-ath" maxlength="30" placeholder="Name"><button class="btn" data-act="addath">Add</button></div></label></section>` : ''}</div></div>
     <div class="section"><h2>Rest Alerts</h2><section class="tile">${notifyHTML()}</section></div>
+    ${ubMoreHTML()}
     <div class="section"><h2>Backup</h2><section class="tile">
       <p class="muted">Your data is stored on this phone.${daysSince != null ? ` Last backup ${daysSince === 0 ? 'today' : daysSince === 1 ? 'yesterday' : daysSince + ' days ago'}.` : ''}</p>
       <button class="btn primary" data-act="backup">Save backup</button>
@@ -1373,6 +1376,54 @@ function notifyHTML(){
   if (Notification.permission === 'granted') return `<div class="rowsb"><span>Rest countdown in notifications</span><b style="color:var(--green)">On</b></div>${ios}`;
   if (Notification.permission === 'denied') return `<p class="muted">Turn on notifications for Liftlog in your phone's Settings.</p>`;
   return `<p class="muted">Show the rest countdown in notifications.</p>${ios}<button class="btn" data-act="notify">Turn on</button>`;
+}
+/* ================= Unbroken bridge =================
+   Unbroken is the companion Android habit tracker. A web app can't write into a native app in the
+   background, so one tap opens unbroken://sync with recent workout days; Unbroken records them on
+   the linked "X days a week" task and closes, landing you back here. Days are re-sent until synced,
+   and Unbroken ignores days it already has, so a missed tap catches up next time. */
+const UB = {
+  android: () => /Android/i.test(navigator.userAgent),
+  on: () => UB.android() && pref.get('unbroken', true),
+  aid: () => athleteIds().find(id => S.athletes[id].me) || S.aid,
+  days(){ const aid = UB.aid(); if (!aid) return []; const t = today(), from = addDays(t, -90); return ix(aid).dates.filter(d => d >= from && d <= t); },
+  sentSet: () => new Set(pref.get('unbroken.sent', [])),
+  unsent(){ const s = UB.sentSet(); return UB.days().filter(d => !s.has(d)); },
+  isSent: d => UB.sentSet().has(d),
+  url(){
+    const aid = UB.aid(), goal = (S.athletes[aid] || {}).goal || 4;
+    const list = UB.days().map(d => { const day = getDay(aid, d); return day && day.t1 ? `${d}~${day.t1}` : d; }).join(',');
+    const fallback = encodeURIComponent('https://github.com/humongous18/Streaks/releases/latest');
+    return `intent://sync?src=liftlog&v=1&goal=${goal}&d=${encodeURIComponent(list)}#Intent;scheme=unbroken;package=com.betterlife.unbroken;S.browser_fallback_url=${fallback};end`;
+  },
+  send(){
+    const days = UB.days();
+    if (!days.length) return toast('No workouts to send yet.', 'err');
+    const keep = addDays(today(), -120), sent = UB.sentSet(); days.forEach(d => sent.add(d));
+    pref.set('unbroken.sent', [...sent].filter(d => d >= keep));
+    location.href = UB.url();
+    setTimeout(render, 800);
+  },
+};
+function ubLogHTML(d, ds){
+  if (!UB.on() || S.aid !== UB.aid() || !ds || !ds.sets) return '';
+  return UB.isSent(d)
+    ? `<p class="muted small" style="text-align:center;margin-top:10px">✓ Sent to Unbroken · <button class="link" data-act="unbroken">Send again</button></p>`
+    : `<button class="btn wide" style="margin-top:10px" data-act="unbroken">${IC.check} Done · send to Unbroken</button>`;
+}
+function ubTodayHTML(){
+  if (!UB.on() || S.aid !== UB.aid()) return '';
+  const n = UB.unsent().filter(d => d !== today()).length;
+  if (!n) return '';
+  return `<section class="tile" style="margin-top:12px"><div class="rowsb"><span>${n === 1 ? '1 earlier workout isn\'t' : n + ' earlier workouts aren\'t'} in Unbroken yet</span><button class="btn" data-act="unbroken">Send</button></div></section>`;
+}
+function ubMoreHTML(){
+  if (!UB.android()) return '';
+  const on = pref.get('unbroken', true);
+  return `<div class="section"><h2>Unbroken</h2><section class="tile">
+      <p class="muted">Mark workouts on your “X days a week” task in the Unbroken habit app. After a workout, tap <b>Done · send to Unbroken</b>.</p>
+      ${on ? `<button class="btn primary" data-act="unbroken">Send workouts now</button>` : ''}
+      <button class="link" data-act="unbrokentoggle">${on ? 'Hide Unbroken buttons' : 'Show Unbroken buttons'}</button></section></div>`;
 }
 const VIEWS = {today:vToday, log:vLog, calendar:vCal, trends:vTrends, more:vMore};
 
@@ -1633,6 +1684,8 @@ function draftToSet(type, u){
 }
 const STEP = {w:u => u==='lb' ? 5 : 2.5, r:() => 1, d:() => 0.5};
 const ACT = {
+  unbroken(){ UB.send(); },
+  unbrokentoggle(){ pref.set('unbroken', !pref.get('unbroken', true)); render(); },
   ath(el){ S.aid = el.dataset.v; pref.set('aid', S.aid); if (S.view === 'calendar') S.calJump = true; if (S.sheet && S.sheet.kind==='ex') S.draft = defaultDraft(S.sheet.ex); render(); },
   onboard(){
     const n1 = $('#ob-1').value.trim(), n2 = $('#ob-2').value.trim(), u = $('#ob-u').value;

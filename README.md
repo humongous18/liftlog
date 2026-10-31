@@ -15,6 +15,10 @@ A workout log for your phone: FitNotes-style set tracking with WHOOP-style strai
 
 Once installed it opens full screen and works without signal.
 
+## Unbroken (habit tracker) link
+
+On Android, Liftlog can mark your workouts in the [Unbroken](https://github.com/humongous18/Streaks) habit app. After a workout, tap **Done · send to Unbroken** on the log screen. The first time, Unbroken asks which task to use or creates a "Work Out" task from your weekly goal. Earlier workouts that weren't sent yet go along too. Hide the buttons under More › Unbroken.
+
 ## Shipping an update
 
 Change the files, then bump `VERSION` in `sw.js` so phones pick up the new version the next time the app is opened online.
