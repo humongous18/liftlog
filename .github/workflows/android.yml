@@ -63,9 +63,17 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace assembleRelease
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log
           mkdir -p out
           cp app/build/outputs/apk/release/app-release.apk "out/Liftlog-${VERSION_NAME}.apk"
+
+      - name: Report compile errors
+        if: failure()
+        run: |
+          grep -E "^e: |error: |What went wrong|AAPT: error|Execution failed" -A2 build.log | head -60 | while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error::${line//%/%25}"
+          done || true
 
       - uses: actions/upload-artifact@v4
         with:

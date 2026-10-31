@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Liftlog</string>
+    <string name="widget_streak_name">Liftlog streak</string>
+    <string name="widget_streak_desc">Your day streak and workouts this week</string>
+    <string name="widget_week_name">Liftlog week</string>
+    <string name="widget_week_desc">Sets per day this week, with a Start workout button</string>
+    <string name="widget_start">Start workout</string>
 </resources>

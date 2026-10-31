@@ -116,6 +116,12 @@ class Bridge(private val activity: MainActivity) {
         activity.runOnUiThread { activity.openExternal(uri) }
     }
 
+    /** Summary for the home-screen widgets (streak, this week). */
+    @JavascriptInterface
+    fun widgetData(json: String) {
+        LiftlogWidgets.save(ctx, json)
+    }
+
     @JavascriptInterface
     fun platformVersion(): Int = Build.VERSION.SDK_INT
 }

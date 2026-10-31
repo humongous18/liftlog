@@ -601,7 +601,7 @@ const DB = {
   }
 };
 function saveFail(){ S.storeOk = false; toast("Couldn't save on this phone. Storage may be full or blocked by private browsing.", 'err'); scheduleRender(); }
-function changed(){ S.ver++; derive(); scheduleRender(); if (NA) UB.autoSync(false); }
+function changed(){ S.ver++; derive(); scheduleRender(); if (NA) { UB.autoSync(false); pushWidget(); } }
 async function patchDoc(path, patch){
   DOCS[path] = deepMerge(DOCS[path], patch); changed();
   try { await DB.put(path, JSON.parse(JSON.stringify(DOCS[path]))); } catch { saveFail(); }
@@ -1429,6 +1429,22 @@ const UB = {
   },
 };
 // Called by the Android app with Habits' answer: 1 = synced, 2 = no habit linked yet, 0 = Habits not installed.
+// Android app: a small summary for the home-screen widgets (streak, this week's workouts, sets per day).
+let widgetTimer = null;
+function pushWidget(){
+  if (!NA || !NA.widgetData) return;
+  clearTimeout(widgetTimer);
+  widgetTimer = setTimeout(() => {
+    try {
+      const aid = UB.aid(); if (!aid || !S.athletes[aid]) return;
+      const I = ix(aid), si = streakInfo(aid), t = today(), ws = addDays(t, -parseISO(t).getDay());
+      const week = [0,1,2,3,4,5,6].map(i => { const d = addDays(ws, i); return {d, sets: I.dayStats[d] ? I.dayStats[d].sets : 0}; });
+      const goal = (si.tg && si.tg.g) || S.athletes[aid].goal || 4;
+      const wo = week.filter(x => x.d <= t && x.sets > 0).length;
+      NA.widgetData(JSON.stringify({date: t, name: S.athletes[aid].name || '', streak: si.days || 0, best: si.best || 0, state: si.state || '', wo, goal, week, todaySets: I.dayStats[t] ? I.dayStats[t].sets : 0}));
+    } catch {}
+  }, 800);
+}
 window.__habitsResult = (code, title) => {
   pref.set('habits.status', {code, title: title || '', at: Date.now()});
   if (code === 1) pref.set('habits.sig', pref.get('habits.pending', ''));
@@ -2211,6 +2227,7 @@ async function init(){
 }
 init();
 window.__liftlogResume = () => { if (S.view === 'more') render(); };
+window.__liftlogOpenLog = () => { S.date = today(); navTo('log'); };
 // Android app: open files through the system picker instead of <input type=file>, then hand the file to
 // the same change handlers (backup restore/merge, FitNotes and Cronometer imports).
 if (NA) document.addEventListener('click', e => {

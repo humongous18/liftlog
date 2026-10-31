@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
         @Volatile
         var foreground = false
 
+        const val EXTRA_HASH = "hash"
         const val HOST = "appassets.androidplatform.net"
         const val START_URL = "https://$HOST/assets/www/index.html"
     }
@@ -172,8 +173,17 @@ class MainActivity : ComponentActivity() {
             }
         })
 
+        val startHash = intent?.getStringExtra(EXTRA_HASH)?.takeIf { it.matches(Regex("[a-z]{2,12}")) } ?: "today"
         if (savedInstanceState != null) web.restoreState(savedInstanceState)
-        if (web.url == null) web.loadUrl("$START_URL#today")
+        if (web.url == null) web.loadUrl("$START_URL#$startHash")
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Widget taps: jump to Today or the workout log.
+        val hash = intent.getStringExtra(EXTRA_HASH)?.takeIf { it.matches(Regex("[a-z]{2,12}")) } ?: return
+        js(if (hash == "log") "window.__liftlogOpenLog && window.__liftlogOpenLog()" else "location.hash = ${JSONObject.quote("#$hash")}")
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
