@@ -15,9 +15,20 @@ A workout log for your phone: FitNotes-style set tracking with WHOOP-style strai
 
 Once installed it opens full screen and works without signal.
 
-## Unbroken (habit tracker) link
+## Habits link
 
-On Android, Liftlog can mark your workouts in the [Unbroken](https://github.com/humongous18/Streaks) habit app. After a workout, tap **Done · send to Unbroken** on the log screen. The first time, Unbroken asks which task to use or creates a "Work Out" task from your weekly goal. Earlier workouts that weren't sent yet go along too. Hide the buttons under More › Unbroken.
+Liftlog ticks off your "X days a week" habit in the [Habits](https://github.com/humongous18/Streaks) app.
+
+- **Liftlog Android app:** automatic. Every workout you log syncs to Habits in the background. The first time, Habits sends a notification asking which habit to link (or creates a "Work Out" habit from your weekly goal). Status is under More › Habits.
+- **Browser version on Android:** tap **Done · send to Habits** after a workout.
+
+## Android app
+
+The `android/` folder wraps this web app in a small native app (WebView, files bundled, works offline). It adds background sync to Habits, rest-timer notifications that work with the app closed, and native backup save/open. GitHub Actions builds it on every push; tag `v1.2.3` or run the workflow with a version to publish a release APK.
+
+It must be signed with the same key as Habits (same four `KEYSTORE_*`/`KEY_*` secrets) — Android only lets apps with matching signatures use the private sync permission.
+
+Moving from the browser version: in the browser go to More › Save backup, then in the app More › Restore backup.
 
 ## Shipping an update
 

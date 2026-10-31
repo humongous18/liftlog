@@ -601,7 +601,7 @@ const DB = {
   }
 };
 function saveFail(){ S.storeOk = false; toast("Couldn't save on this phone. Storage may be full or blocked by private browsing.", 'err'); scheduleRender(); }
-function changed(){ S.ver++; derive(); scheduleRender(); }
+function changed(){ S.ver++; derive(); scheduleRender(); if (NA) UB.autoSync(false); }
 async function patchDoc(path, patch){
   DOCS[path] = deepMerge(DOCS[path], patch); changed();
   try { await DB.put(path, JSON.parse(JSON.stringify(DOCS[path]))); } catch { saveFail(); }
@@ -1321,7 +1321,7 @@ function celebrate(aid, before, delay){
 }
 
 /* ---------- more ---------- */
-const standalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const standalone = () => !!window.LiftlogAndroid || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 function vMore(){
   const ids = athleteIds(), u = unit();
@@ -1371,59 +1371,97 @@ function freezeHTML(){
   return `<div class="fzmore"><span class="muted small">${who}: ${si.freezes} of ${FREEZE_MAX}</span>${full ? '' : `<button class="link small" data-act="addfreeze">${S.confirm === 'addfreeze' ? 'Tap again to add' : 'Add a freeze'}</button>`}</div>`;
 }
 function notifyHTML(){
+  if (NA) {
+    let on = false; try { on = NA.notificationsEnabled(); } catch {}
+    return on ? '<div class="rowsb"><span>Rest countdown in notifications</span><b style="color:var(--green)">On</b></div>'
+      : '<p class="muted">Show the rest countdown and a buzz when rest is over, even with Liftlog closed.</p><button class="btn" data-act="notify">Turn on</button>';
+  }
   if (!('Notification' in window)) return isIOS() && !standalone() ? '<p class="muted">Install Liftlog to turn on alerts.</p>' : '<p class="muted">Not available in this browser.</p>';
   const ios = isIOS() ? '<p class="muted small">On iPhone, alerts appear when you return to Liftlog.</p>' : '';
   if (Notification.permission === 'granted') return `<div class="rowsb"><span>Rest countdown in notifications</span><b style="color:var(--green)">On</b></div>${ios}`;
   if (Notification.permission === 'denied') return `<p class="muted">Turn on notifications for Liftlog in your phone's Settings.</p>`;
   return `<p class="muted">Show the rest countdown in notifications.</p>${ios}<button class="btn" data-act="notify">Turn on</button>`;
 }
-/* ================= Unbroken bridge =================
-   Unbroken is the companion Android habit tracker. A web app can't write into a native app in the
-   background, so one tap opens unbroken://sync with recent workout days; Unbroken records them on
-   the linked "X days a week" task and closes, landing you back here. Days are re-sent until synced,
-   and Unbroken ignores days it already has, so a missed tap catches up next time. */
+/* ================= Habits bridge =================
+   Habits is the companion Android habit tracker. Inside the Liftlog Android app (window.LiftlogAndroid),
+   workouts sync to Habits automatically in the background. In a browser, a web page can't write into a
+   native app, so a "Done · send to Habits" button opens habits://sync instead. Either way Habits fills in
+   the listed days on the linked "X days a week" habit and ignores days it already has. */
+const NA = window.LiftlogAndroid || null;
 const UB = {
-  android: () => /Android/i.test(navigator.userAgent),
-  on: () => UB.android() && pref.get('unbroken', true),
+  android: () => !!NA || /Android/i.test(navigator.userAgent),
+  on: () => !NA && UB.android() && pref.get('habitsBtn', true),
   aid: () => athleteIds().find(id => S.athletes[id].me) || S.aid,
   days(){ const aid = UB.aid(); if (!aid) return []; const t = today(), from = addDays(t, -90); return ix(aid).dates.filter(d => d >= from && d <= t); },
-  sentSet: () => new Set(pref.get('unbroken.sent', [])),
+  sentSet: () => new Set(pref.get('habits.sent', [])),
   unsent(){ const s = UB.sentSet(); return UB.days().filter(d => !s.has(d)); },
   isSent: d => UB.sentSet().has(d),
-  url(){
+  payload(){
     const aid = UB.aid(), goal = (S.athletes[aid] || {}).goal || 4;
-    const list = UB.days().map(d => { const day = getDay(aid, d); return day && day.t1 ? `${d}~${day.t1}` : d; }).join(',');
-    const fallback = encodeURIComponent('https://github.com/humongous18/Streaks/releases/latest');
-    return `intent://sync?src=liftlog&v=1&goal=${goal}&d=${encodeURIComponent(list)}#Intent;scheme=unbroken;package=com.betterlife.unbroken;S.browser_fallback_url=${fallback};end`;
+    const d = UB.days().map(x => { const day = getDay(aid, x); return day && day.t1 ? `${x}~${day.t1}` : x; }).join(',');
+    return {goal, d};
+  },
+  link(){ const p = UB.payload(); return `habits://sync?src=liftlog&v=1&goal=${p.goal}&d=${encodeURIComponent(p.d)}`; },
+  url(){
+    const p = UB.payload(), fallback = encodeURIComponent('https://github.com/humongous18/Streaks/releases/latest');
+    return `intent://sync?src=liftlog&v=1&goal=${p.goal}&d=${encodeURIComponent(p.d)}#Intent;scheme=habits;package=com.betterlife.habits;S.browser_fallback_url=${fallback};end`;
   },
   send(){
+    if (NA) return UB.autoSync(true);
     const days = UB.days();
     if (!days.length) return toast('No workouts to send yet.', 'err');
     const keep = addDays(today(), -120), sent = UB.sentSet(); days.forEach(d => sent.add(d));
-    pref.set('unbroken.sent', [...sent].filter(d => d >= keep));
+    pref.set('habits.sent', [...sent].filter(d => d >= keep));
     location.href = UB.url();
     setTimeout(render, 800);
   },
+  // Android app only: push the workout list to Habits whenever it changes (debounced).
+  timer: null,
+  autoSync(force){
+    if (!NA || !S.ready || !UB.aid()) return;
+    clearTimeout(UB.timer);
+    UB.timer = setTimeout(() => {
+      const p = UB.payload(), sig = p.goal + '|' + p.d;
+      if (!force && sig === pref.get('habits.sig', '')) return;
+      pref.set('habits.pending', sig);
+      try { NA.syncWorkouts(p.goal, p.d); } catch {}
+    }, force ? 0 : 2000);
+  },
+};
+// Called by the Android app with Habits' answer: 1 = synced, 2 = no habit linked yet, 0 = Habits not installed.
+window.__habitsResult = (code, title) => {
+  pref.set('habits.status', {code, title: title || '', at: Date.now()});
+  if (code === 1) pref.set('habits.sig', pref.get('habits.pending', ''));
+  if (S.view === 'more') render();
 };
 function ubLogHTML(d, ds){
   if (!UB.on() || S.aid !== UB.aid() || !ds || !ds.sets) return '';
   return UB.isSent(d)
-    ? `<p class="muted small" style="text-align:center;margin-top:10px">✓ Sent to Unbroken · <button class="link" data-act="unbroken">Send again</button></p>`
-    : `<button class="btn wide" style="margin-top:10px" data-act="unbroken">${IC.check} Done · send to Unbroken</button>`;
+    ? `<p class="muted small" style="text-align:center;margin-top:10px">✓ Sent to Habits · <button class="link" data-act="habitssend">Send again</button></p>`
+    : `<button class="btn wide" style="margin-top:10px" data-act="habitssend">${IC.check} Done · send to Habits</button>`;
 }
 function ubTodayHTML(){
   if (!UB.on() || S.aid !== UB.aid()) return '';
   const n = UB.unsent().filter(d => d !== today()).length;
   if (!n) return '';
-  return `<section class="tile" style="margin-top:12px"><div class="rowsb"><span>${n === 1 ? '1 earlier workout isn\'t' : n + ' earlier workouts aren\'t'} in Unbroken yet</span><button class="btn" data-act="unbroken">Send</button></div></section>`;
+  return `<section class="tile" style="margin-top:12px"><div class="rowsb"><span>${n === 1 ? '1 earlier workout isn\'t' : n + ' earlier workouts aren\'t'} in Habits yet</span><button class="btn" data-act="habitssend">Send</button></div></section>`;
 }
 function ubMoreHTML(){
+  if (NA) {
+    const st = pref.get('habits.status', null), ago = st ? Math.round((Date.now() - st.at) / 60000) : null;
+    const when = ago == null ? '' : ago < 1 ? 'just now' : ago < 60 ? `${ago} min ago` : ago < 1440 ? `${Math.round(ago/60)} h ago` : `${Math.round(ago/1440)} d ago`;
+    const line = !st ? '<p class="muted">Workouts sync to the Habits app automatically.</p>'
+      : st.code === 1 ? `<div class="rowsb"><span>Syncing to <b>${esc(st.title || 'Habits')}</b></span><b style="color:var(--green)">On</b></div><p class="muted small">Last sync ${when}.</p>`
+      : st.code === 2 ? `<p class="muted">Habits is installed, but no habit is linked to Liftlog yet.</p><button class="btn primary" data-act="habitslink">Choose a habit</button>`
+      : `<p class="muted">Install the Habits app to tick off an “X days a week” habit every time you train.</p><button class="btn" data-act="habitsget">Get Habits</button>`;
+    return `<div class="section"><h2>Habits</h2><section class="tile">${line}<button class="link" data-act="habitssend">Sync now</button></section></div>`;
+  }
   if (!UB.android()) return '';
-  const on = pref.get('unbroken', true);
-  return `<div class="section"><h2>Unbroken</h2><section class="tile">
-      <p class="muted">Mark workouts on your “X days a week” task in the Unbroken habit app. After a workout, tap <b>Done · send to Unbroken</b>.</p>
-      ${on ? `<button class="btn primary" data-act="unbroken">Send workouts now</button>` : ''}
-      <button class="link" data-act="unbrokentoggle">${on ? 'Hide Unbroken buttons' : 'Show Unbroken buttons'}</button></section></div>`;
+  const on = pref.get('habitsBtn', true);
+  return `<div class="section"><h2>Habits</h2><section class="tile">
+      <p class="muted">Mark workouts on your “X days a week” habit in the Habits app. After a workout, tap <b>Done · send to Habits</b>.</p>
+      ${on ? `<button class="btn primary" data-act="habitssend">Send workouts now</button>` : ''}
+      <button class="link" data-act="habitstoggle">${on ? 'Hide Habits buttons' : 'Show Habits buttons'}</button></section></div>`;
 }
 const VIEWS = {today:vToday, log:vLog, calendar:vCal, trends:vTrends, more:vMore};
 
@@ -1684,8 +1722,10 @@ function draftToSet(type, u){
 }
 const STEP = {w:u => u==='lb' ? 5 : 2.5, r:() => 1, d:() => 0.5};
 const ACT = {
-  unbroken(){ UB.send(); },
-  unbrokentoggle(){ pref.set('unbroken', !pref.get('unbroken', true)); render(); },
+  habitssend(){ UB.send(); },
+  habitslink(){ try { NA && NA.openHabits(UB.link()); } catch {} },
+  habitsget(){ try { NA && NA.openUrl('https://github.com/humongous18/Streaks/releases/latest'); } catch {} },
+  habitstoggle(){ pref.set('habitsBtn', !pref.get('habitsBtn', true)); render(); },
   ath(el){ S.aid = el.dataset.v; pref.set('aid', S.aid); if (S.view === 'calendar') S.calJump = true; if (S.sheet && S.sheet.kind==='ex') S.draft = defaultDraft(S.sheet.ex); render(); },
   onboard(){
     const n1 = $('#ob-1').value.trim(), n2 = $('#ob-2').value.trim(), u = $('#ob-u').value;
@@ -1799,7 +1839,7 @@ const ACT = {
   gmet(el){ S.gMetric = el.dataset.v; render(); },
   grange(el){ S.gRange = el.dataset.v; render(); },
   rest(){ startRest((A().rest ?? 90) || 90, S.sheet && S.sheet.kind === 'ex' ? exMeta(S.sheet.ex).name : null); },
-  notify(){ askNotify(true); },
+  notify(){ if (NA) { try { NA.requestNotifications(); } catch {} return; } askNotify(true); },
   tadd(el){ if (!S.timer) return; if (S.timer.done) { stopRest(); return; } const d = (+el.dataset.v)*1000; S.timer.end = Math.max(Date.now() + 1000, S.timer.end + d); S.timer.total = Math.max(S.timer.total + d, S.timer.end - Date.now()); saveTimer(); armRest(); tick(); },
   tstop(){ stopRest(); },
   rpe(el){ const v = +el.dataset.v, day = cloneDay(S.aid, S.date); day.rpe = day.rpe === v ? null : v; saveDay(S.aid, S.date, day); },
@@ -1833,6 +1873,7 @@ const ACT = {
 
 /* ================= files ================= */
 async function saveFile(name, text, type){
+  if (NA) { try { NA.saveFile(name, type, text); return true; } catch { return false; } }
   const blob = new Blob([text], {type});
   try {
     const file = new File([blob], name, {type});
@@ -1910,10 +1951,10 @@ async function loadBackup(file, mode){
 
 /* ================= timer ================= */
 const BUZZ = [500, 250, 500]; // two medium vibrations
-function buzz(){ try { navigator.vibrate && navigator.vibrate(BUZZ); } catch {} }
+function buzz(){ try { if (NA) NA.vibrate(JSON.stringify(BUZZ)); else navigator.vibrate && navigator.vibrate(BUZZ); } catch {} }
 // The rest timer is kept as an end time (not a countdown), so it stays right after the phone sleeps or the app is closed and reopened.
 let restT = null;
-const saveTimer = () => pref.set('timer', S.timer);
+const saveTimer = () => { pref.set('timer', S.timer); if (NA) { try { const t = S.timer; NA.restTimer(t && !t.done ? t.end : 0, t ? t.total : 0, (t && t.ex) || ''); } catch {} } };
 function armRest(){ clearTimeout(restT); if (S.timer && !S.timer.done) restT = setTimeout(tick, Math.max(0, S.timer.end - Date.now()) + 30); }
 function startRest(sec, exName){ const s = sec ?? (A() ? (A().rest ?? 90) : 90); if (!s) return; S.timer = {end:Date.now() + s*1000, total:s*1000, done:false, ex:exName || null}; saveTimer(); armRest(); askNotify(false); tick(); }
 function stopRest(){ S.timer = null; saveTimer(); clearTimeout(restT); stopBgLoop(); clearRestNote(); tick(); }
@@ -1950,6 +1991,7 @@ function startBgLoop(){
   bgLoop = setInterval(() => { if (!document.hidden || !S.timer || S.timer.done) { stopBgLoop(); return; } showRestNote(false); }, 1000);
 }
 function askNotify(fromButton){
+  if (NA) { if (!pref.get('askedNotify', false)) { pref.set('askedNotify', true); try { NA.requestNotifications(); } catch {} } return; }
   try {
     if (!('Notification' in window) || Notification.permission !== 'default') return;
     if (!fromButton && pref.get('askedNotify', false)) return;
@@ -1977,8 +2019,8 @@ function tick(){
 }
 setInterval(tick, 250);
 let wake = null;
-async function keepAwake(){ try { if (!wake && navigator.wakeLock) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch {} }
-function releaseAwake(){ try { wake && wake.release(); } catch {} wake = null; }
+async function keepAwake(){ if (NA) { try { NA.keepAwake(true); } catch {} return; } try { if (!wake && navigator.wakeLock) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch {} }
+function releaseAwake(){ if (NA) { try { NA.keepAwake(false); } catch {} } try { wake && wake.release(); } catch {} wake = null; }
 // If Liftlog stays open past midnight, whatever was showing "today" moves to the new day.
 let lastToday = today();
 function checkRollover(){ const t = today(); if (t === lastToday) return; const prev = lastToday; lastToday = t; if (S.date === prev) { S.date = t; if (S.sheet && S.sheet.kind === 'ex') { S.editIdx = null; S.confirm = null; S.draft = defaultDraft(S.sheet.ex); } } if (S.calMonth === prev.slice(0,7)) S.calMonth = t.slice(0,7); if (S.ready) render(); }
@@ -2164,9 +2206,11 @@ async function init(){
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
   const t = pref.get('timer', null); if (t && t.end && t.total) { S.timer = t; if (t.done || t.end < Date.now() - 60000) { S.timer = null; saveTimer(); } else armRest(); }
   S.ready = true; changed();
+  if (NA) UB.autoSync(true);
 }
 init();
-if ('serviceWorker' in navigator && location.protocol === 'https:') window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+window.__liftlogResume = () => { if (S.view === 'more') render(); };
+if (!NA && 'serviceWorker' in navigator && location.protocol === 'https:') window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 })();
 </script>
 </body>
