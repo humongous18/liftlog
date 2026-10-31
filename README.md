@@ -33,3 +33,7 @@ Moving from the browser version: in the browser go to More › Save backup, then
 ## Shipping an update
 
 Change the files, then bump `VERSION` in `sw.js` so phones pick up the new version the next time the app is opened online.
+
+### Releasing a new version
+
+Change the number in the `VERSION` file (e.g. `1.0.1`) and push to `main`. The workflow builds the APK and publishes it as a GitHub Release `v1.0.1` (only once per version). Builds without a new version are attached to the workflow run as artifacts.
