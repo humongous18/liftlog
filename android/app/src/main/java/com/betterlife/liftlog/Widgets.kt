@@ -15,6 +15,7 @@ import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.widget.RemoteViews
+import androidx.core.graphics.PathParser
 import org.json.JSONObject
 import java.time.LocalDate
 import kotlin.math.max
@@ -101,19 +102,17 @@ object LiftlogWidgets {
     /** Is the stored summary from today? After midnight the week strip would be stale. */
     private fun fresh(d: JSONObject): Boolean = d.optString("date") == LocalDate.now().toString()
 
+    // Material "local_fire_department" (Apache 2.0), 24×24 viewport.
+    private val FLAME = listOf(
+        "M12,12.9l-2.13,2.09C9.31,15.55 9,16.28 9,17.06C9,18.68 10.35,20 12,20s3,-1.32 3,-2.94c0,-0.78 -0.31,-1.52 -0.87,-2.07L12,12.9z",
+        "M16,6l-0.44,0.55C14.38,8.02 12,7.19 12,5.3V2c0,0 -8,4 -8,11c0,2.92 1.56,5.47 3.89,6.86C7.33,19.07 7,18.1 7,17.06c0,-1.32 0.52,-2.56 1.47,-3.5L12,10.1l3.53,3.47c0.95,0.93 1.47,2.17 1.47,3.5c0,1.02 -0.31,1.96 -0.85,2.75c1.89,-1.15 3.29,-3.06 3.71,-5.3C20.52,10.97 18.79,7.62 16,6z",
+    ).map { PathParser.createPathFromPathData(it) }
+
     private fun flame(c: Canvas, cx: Float, cy: Float, size: Float, color: Int) {
-        // Material "local_fire_department" outline, scaled from its 24×24 viewport.
         val s = size / 24f
-        val p = Path()
-        p.moveTo(16f, 6f); p.lineTo(15.56f, 6.55f)
-        p.cubicTo(14.38f, 8.02f, 12f, 7.19f, 12f, 5.3f); p.lineTo(12f, 2f)
-        p.cubicTo(12f, 2f, 4f, 6f, 4f, 13f)
-        p.cubicTo(4f, 17.42f, 7.58f, 21f, 12f, 21f)
-        p.cubicTo(16.42f, 21f, 20f, 17.42f, 20f, 13f)
-        p.cubicTo(20f, 10.04f, 18.39f, 7.38f, 16f, 6f); p.close()
         val m = android.graphics.Matrix().apply { setScale(s, s); postTranslate(cx - 12f * s, cy - 12f * s) }
-        p.transform(m)
-        c.drawPath(p, paint(color))
+        val p = paint(color)
+        for (src in FLAME) c.drawPath(Path(src).apply { transform(m) }, p)
     }
 
     fun updateStreak(ctx: Context, m: AppWidgetManager, id: Int) {
@@ -154,53 +153,76 @@ object LiftlogWidgets {
     }
 
     fun updateWeek(ctx: Context, m: AppWidgetManager, id: Int) {
-        val (w, h) = sizePx(ctx, m, id, 300, 150)
+        // The picture fills only the area above the button (widget minus padding, button and its
+        // margins), drawn at that exact size so nothing gets stretched.
+        val o = m.getAppWidgetOptions(id)
+        val density = ctx.resources.displayMetrics.density
+        val wDp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0).takeIf { it > 0 } ?: 300
+        val hDp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0).takeIf { it > 0 } ?: 150
+        val scale = min(density, 900f / wDp)
+        val w = ((wDp - 8) * scale).toInt().coerceAtLeast(120)
+        val h = ((hDp - 8 - 40 - 12) * scale).toInt().coerceAtLeast(60)
+        val dp = scale
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        background(c, w, h)
-        val u = h.toFloat()
         val d = load(ctx)
-        val pad = u * 0.1f
+        val padX = 16f * dp
+        val padTop = 12f * dp
         if (d == null) {
-            c.drawText("Open Liftlog to set up this widget", w / 2f, h / 2f, paint(MUTED, u * 0.1f, align = Paint.Align.CENTER))
+            c.drawText("Open Liftlog to set up this widget", w / 2f, h / 2f, paint(MUTED, 14f * dp, medium, Paint.Align.CENTER))
         } else {
             val goal = d.optInt("goal", 4)
             val today = LocalDate.now().toString()
             val week = d.optJSONArray("week")
-            val days = (0 until (week?.length() ?: 0)).map { week!!.getJSONObject(it) }
-            val sameWeek = days.any { it.optString("d") == today } && fresh(d)
+            val days = (0 until (week?.length() ?: 0)).mapNotNull { week!!.optJSONObject(it) }
+            val sameWeek = days.any { it.optString("d") == today }
             val wo = if (sameWeek) d.optInt("wo") else 0
-            // Header: "This week 3/4" and the streak.
-            c.drawText("THIS WEEK", pad, pad + u * 0.1f, paint(MUTED, u * 0.1f, medium))
-            val hdr = paint(INK, u * 0.16f)
-            c.drawText("$wo/$goal", pad, pad + u * 0.27f, hdr)
             val streak = d.optInt("streak")
-            val sp = paint(INK, u * 0.13f, align = Paint.Align.RIGHT)
-            val sx = w - pad
-            c.drawText(streak.toString(), sx, pad + u * 0.25f, sp)
-            flame(c, sx - sp.measureText(streak.toString()) - u * 0.09f, pad + u * 0.2f, u * 0.14f, if (streak > 0) ORANGE else DIM)
 
-            // Bars: sets per day, Sunday to Saturday.
-            val top = pad + u * 0.38f
-            val bottom = h - pad - u * 0.14f
-            val slot = (w - 2 * pad) / 7f
-            val maxSets = max(1, days.maxOfOrNull { it.optInt("sets") } ?: 1)
-            val barW = slot * 0.42f
-            val labels = listOf("S", "M", "T", "W", "T", "F", "S")
-            for (i in 0 until 7) {
-                val day = days.getOrNull(i)
-                val ds = day?.optString("d") ?: ""
-                val sets = if (sameWeek) day?.optInt("sets") ?: 0 else 0
-                val cx = pad + slot * (i + 0.5f)
-                val future = sameWeek && ds > today
-                val track = RectF(cx - barW / 2, top, cx + barW / 2, bottom)
-                c.drawRoundRect(track, barW / 2, barW / 2, paint(if (future) 0x00000000 else TILE))
-                if (sets > 0) {
-                    val hh = max(barW, (bottom - top) * sets / maxSets)
-                    c.drawRoundRect(RectF(cx - barW / 2, bottom - hh, cx + barW / 2, bottom), barW / 2, barW / 2, paint(BLUE))
+            // Header — left: "THIS WEEK" over "2 / 3 workouts"; right: flame + streak over "day streak".
+            val label = paint(MUTED, 11f * dp, medium).apply { letterSpacing = 0.08f }
+            val big = paint(INK, 24f * dp, bold)
+            val small = paint(MUTED, 13f * dp, medium)
+            val y1 = padTop + 11f * dp
+            val y2 = y1 + 26f * dp
+            c.drawText("THIS WEEK", padX, y1, label)
+            val count = "$wo/$goal"
+            c.drawText(count, padX, y2, big)
+            c.drawText("workouts", padX + big.measureText(count) + 6f * dp, y2, small)
+
+            val labelR = paint(MUTED, 11f * dp, medium, Paint.Align.RIGHT).apply { letterSpacing = 0.08f }
+            c.drawText("STREAK", w - padX, y1, labelR)
+            val bigR = paint(INK, 24f * dp, bold, Paint.Align.RIGHT)
+            c.drawText(streak.toString(), w - padX, y2, bigR)
+            val fs = 20f * dp
+            flame(c, w - padX - bigR.measureText(streak.toString()) - 4f * dp - fs / 2, y2 - 9f * dp, fs, if (streak > 0) ORANGE else DIM)
+
+            // Bars: sets per day, Sunday to Saturday, fixed width so they never look stretched.
+            val dayLabel = 18f * dp
+            val top = y2 + 14f * dp
+            val bottom = h - dayLabel - 4f * dp
+            if (bottom - top > 12f * dp) {
+                val slot = (w - 2 * padX) / 7f
+                val barW = min(slot * 0.5f, 18f * dp)
+                val maxSets = max(1, days.maxOfOrNull { it.optInt("sets") } ?: 1)
+                val labels = listOf("S", "M", "T", "W", "T", "F", "S")
+                for (i in 0 until 7) {
+                    val day = days.getOrNull(i)
+                    val ds = day?.optString("d") ?: ""
+                    val sets = if (sameWeek) day?.optInt("sets") ?: 0 else 0
+                    val cx = padX + slot * (i + 0.5f)
+                    val isToday = ds == today
+                    val future = sameWeek && ds > today
+                    val r = barW / 2
+                    if (!future) c.drawRoundRect(RectF(cx - r, top, cx + r, bottom), r, r, paint(TILE))
+                    else c.drawCircle(cx, bottom - r, r * 0.35f, paint(DIM))
+                    if (sets > 0) {
+                        val hh = max(barW, (bottom - top) * sets / maxSets)
+                        c.drawRoundRect(RectF(cx - r, bottom - hh, cx + r, bottom), r, r, paint(BLUE))
+                    }
+                    c.drawText(labels[i], cx, h - 4f * dp, paint(if (isToday) INK else MUTED, 12f * dp, if (isToday) bold else medium, Paint.Align.CENTER))
+                    if (isToday) c.drawCircle(cx, h - 1.5f * dp, 1.5f * dp, paint(BLUE))
                 }
-                val isToday = ds == today
-                c.drawText(labels[i], cx, h - pad * 0.7f, paint(if (isToday) INK else MUTED, u * 0.09f, if (isToday) bold else medium, Paint.Align.CENTER))
             }
         }
         val views = RemoteViews(ctx.packageName, R.layout.widget_week).apply {
