@@ -1078,9 +1078,12 @@ function enterSel(i){
   try { if (NA) NA.vibrate(JSON.stringify([20])); else navigator.vibrate && navigator.vibrate(20); } catch {}
   render();
 }
-function exitSel(){ if (!S.sel) return; const n = ourDepth(); S.sel = null; S.selMenu = false; S.selDel = false; S.dlg = null; popOurs(n); render(); }
+// Leaving select mode steps back past its history entries. If a step back is already on its way (a dialog just
+// closed), the rest happens once it lands.
+let popAfter = false;
+function exitSel(){ if (!S.sel) return; const n = ourDepth(); S.sel = null; S.selMenu = false; S.selDel = false; S.dlg = null; if (backPending) popAfter = true; else popOurs(n); render(); }
 // Indices still pointing at exercises on the selected day, in order.
-function selIdx(){ const day = getDay(S.aid, S.date), len = day ? day.entries.length : 0; return S.sel.idx.filter(i => i < len).sort((a,b) => a-b); }
+function selIdx(){ const day = getDay(S.sel.aid, S.sel.d), len = day ? day.entries.length : 0; return S.sel.idx.filter(i => i < len).sort((a,b) => a-b); }
 
 /* ---------- calendar ---------- */
 function vCal(){
@@ -1783,7 +1786,7 @@ function navTo(hash){
   if ('#' + hash !== location.hash) { if (n) { try { history.replaceState(null, '', '#' + hash); } catch {} route(); } else location.hash = hash; }
   else { popOurs(n); render(); window.scrollTo(0,0); }
 }
-window.addEventListener('popstate', () => { backPending = false; if (S.dlg) { S.dlg = null; render(); return; } if (S.sheet) { clearSheet(); render(); return; } if (S.sel) { S.sel = null; S.selMenu = false; S.selDel = false; render(); } });
+window.addEventListener('popstate', () => { backPending = false; if (popAfter) { popAfter = false; if (!S.sel && !S.sheet && !S.dlg) { popOurs(ourDepth()); return; } } if (S.dlg) { S.dlg = null; render(); return; } if (S.sheet) { clearSheet(); render(); return; } if (S.sel) { S.sel = null; S.selMenu = false; S.selDel = false; render(); } });
 function openEx(ex, tab){ openSheet({kind:'ex', ex, tab:tab||'track'}); S.editIdx = null; S.confirm = null; S.gMetric = null; S.draft = defaultDraft(ex); render(); keepAwake(); }
 function setToDraft(s, u){ if (!s) return {w:'', r:'', d:'', t:'', note:''}; return {w:s.w != null ? String(wRaw(s.w,u)) : '', r:s.r != null ? String(s.r) : '', d:s.d ? String(dRaw(s.d,u)) : '', t:s.t ? fmtDur(s.t) : '', note:''}; }
 function defaultDraft(ex){
@@ -1947,13 +1950,13 @@ const ACT = {
   selx(){ exitSel(); },
   selmenu(){ S.selMenu = !S.selMenu; S.selDel = false; render(); },
   selmenuclose(){ S.selMenu = false; S.selDel = false; render(); },
-  selall(){ const day = getDay(S.aid, S.date), len = day ? day.entries.length : 0; S.sel.idx = S.sel.idx.length === len ? [] : [...Array(len).keys()]; S.selMenu = false; render(); },
+  selall(){ const day = getDay(S.sel.aid, S.sel.d), len = day ? day.entries.length : 0; S.sel.idx = S.sel.idx.length === len ? [] : [...Array(len).keys()]; S.selMenu = false; render(); },
   seldel(){
     const idx = selIdx(); if (!idx.length) { S.selMenu = false; render(); return toast('Select an exercise first.', 'err'); }
     if (!S.selDel) { S.selDel = true; render(); return; }
-    const day = cloneDay(S.aid, S.date); day.entries = day.entries.filter((e, i) => !idx.includes(i));
+    const {aid, d} = S.sel, day = cloneDay(aid, d); day.entries = day.entries.filter((e, i) => !idx.includes(i));
     if (!day.entries.length) { day.note = ''; day.rpe = null; }
-    exitSel(); saveDay(S.aid, S.date, day); toast(`Deleted ${idx.length === 1 ? 'exercise' : idx.length + ' exercises'}`);
+    exitSel(); saveDay(aid, d, day); toast(`Deleted ${idx.length === 1 ? 'exercise' : idx.length + ' exercises'}`);
   },
   selcopy(){
     if (!selIdx().length) { S.selMenu = false; render(); return toast('Select an exercise first.', 'err'); }
@@ -1967,8 +1970,8 @@ const ACT = {
     const D = S.dlg, idx = selIdx(), date = D && D.date;
     if (!D || !idx.length) return exitSel();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return toast('Pick a day.', 'err');
-    if (D.to === S.aid && date === S.date) return toast('Pick a different day.', 'err');
-    const src = getDay(S.aid, S.date), day = cloneDay(D.to, date);
+    if (D.to === S.sel.aid && date === S.sel.d) return toast('Pick a different day.', 'err');
+    const src = getDay(S.sel.aid, S.sel.d), day = cloneDay(D.to, date);
     for (const i of idx) { const e = src.entries[i], sets = JSON.parse(JSON.stringify(e.sets||[])).filter(x => x && typeof x === 'object'), ex = day.entries.find(x => x.ex === e.ex); if (ex) ex.sets = (ex.sets||[]).concat(sets); else day.entries.push({ex:e.ex, sets}); }
     const to = D.to; exitSel(); saveDay(to, date, day);
     toast(`Copied ${idx.length === 1 ? 'exercise' : idx.length + ' exercises'} to ${fmtDateLong(date)}${to !== S.aid ? ' for ' + S.athletes[to].name : ''}`);
@@ -2147,7 +2150,7 @@ async function keepAwake(){ if (NA) { try { NA.keepAwake(true); } catch {} retur
 function releaseAwake(){ if (NA) { try { NA.keepAwake(false); } catch {} } try { wake && wake.release(); } catch {} wake = null; }
 // If Liftlog stays open past midnight, whatever was showing "today" moves to the new day.
 let lastToday = today();
-function checkRollover(){ const t = today(); if (t === lastToday) return; const prev = lastToday; lastToday = t; if (S.date === prev) { S.date = t; if (S.sheet && S.sheet.kind === 'ex') { S.editIdx = null; S.confirm = null; S.draft = defaultDraft(S.sheet.ex); } } if (S.calMonth === prev.slice(0,7)) S.calMonth = t.slice(0,7); if (S.ready) render(); }
+function checkRollover(){ const t = today(); if (t === lastToday) return; const prev = lastToday; lastToday = t; if (S.date === prev) { exitSel(); S.date = t; if (S.sheet && S.sheet.kind === 'ex') { S.editIdx = null; S.confirm = null; S.draft = defaultDraft(S.sheet.ex); } } if (S.calMonth === prev.slice(0,7)) S.calMonth = t.slice(0,7); if (S.ready) render(); }
 setInterval(checkRollover, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { if (S.timer && !S.timer.done) startBgLoop(); return; }
   if (document.visibilityState === 'visible') { noteGen++; stopBgLoop(); clearRestNote(); setTimeout(clearRestNote, 400); checkRollover(); if (S.timer && S.timer.done) { S.timer.doneAt = Date.now(); saveTimer(); } tick(); if (S.sheet && S.sheet.kind === 'ex') keepAwake(); if (S.ready && S.date < today() && S.view === 'today') render(); } });
@@ -2284,6 +2287,7 @@ function exportCSV(){
 /* ================= events ================= */
 document.addEventListener('click', ev => {
   const navA = ev.target.closest('#nav a');
+  if (navA && S.sel) { ev.preventDefault(); if (navA.dataset.nav === S.view) exitSel(); else navTo(navA.dataset.nav); return; }
   if (navA && navA.dataset.nav === S.view && !S.sheet) { ev.preventDefault(); if (S.view === 'calendar') scrollToMonth(today().slice(0,7), true); else window.scrollTo({top:0, behavior:'smooth'}); return; }
   if (ev.target.id === 'datepick') { try { ev.target.showPicker && ev.target.showPicker(); } catch {} }
   const el = ev.target.closest('[data-act]'); if (!el) return;
