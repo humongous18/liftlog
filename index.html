@@ -181,6 +181,22 @@ textarea.txt{min-height:80px;resize:vertical}
 .entries{display:flex;flex-direction:column;gap:10px}
 .entries{gap:8px!important}
 .entry{display:block;text-align:left;width:100%;background:var(--tile);border-radius:14px;padding:10px 14px}
+/* Select mode in the Log: long press an exercise to start */
+.selbar{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;margin:0 -16px 6px;padding:calc(6px + env(safe-area-inset-top,0px)) 16px 6px;background:var(--bg)}
+.selbar .daylbl{padding:4px 0}
+.selbar .menu{top:calc(100% - 2px);right:16px}
+.entry.selmode .entry-h{justify-content:flex-start}
+.entry.selmode .entry-h > span{margin-left:auto}
+.entry .ck{flex:none;align-self:center;width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--mute);display:grid;place-items:center;color:#fff}
+.entry .ck svg{width:14px;height:14px}
+.entry.sel{box-shadow:inset 0 0 0 2px var(--blue)}
+.entry.sel .ck{background:var(--blue);box-shadow:none}
+.delall{display:flex;justify-content:center;margin-top:18px}
+.delall .tbtn{color:var(--red)}
+.rtedit{display:flex;flex-direction:column;gap:10px;padding:12px 0;border-bottom:1px solid var(--hair)}
+.rtedit .row{display:flex;align-items:center;gap:10px}
+.rtlinks{display:flex;gap:16px;flex:none}
+.rtlinks .link{min-height:44px}
 .entry-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:3px}
 .entry-h b{font-size:16px;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sline{display:flex;flex-wrap:wrap;gap:2px 14px;font-family:var(--f-num);font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.3}
@@ -508,6 +524,7 @@ const IC = {
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   flame:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.6 2.2c.4 3.2 5.4 5.6 5.4 11.1a6 6 0 0 1-12 0c0-2.9 1.5-4.8 3-6.1.2 1.8 1.1 2.9 2.3 3.3.1-3.6-.7-6.3 1.3-8.3z"/></svg>',
   snow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M3.3 7l17.4 10M20.7 7L3.3 17M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5M4 10.2l3.4-.9-.9-3.4M20 13.8l-3.4.9.9 3.4M17.5 5.9l-.9 3.4 3.4.9M6.5 18.1l.9-3.4-3.4-.9"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
   list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>'
 };
@@ -549,7 +566,7 @@ const pref = { get(k,d){ try { const v = localStorage.getItem('liftlog.'+k); ret
 const S = {
   ready:false, storeOk:true,
   view:'today', aid:pref.get('aid',null), date:today(), calMonth:today().slice(0,7),
-  sheet:null, draft:{}, editIdx:null, addQ:'', addCat:null, confirm:null,
+  sheet:null, draft:{}, editIdx:null, addQ:'', addCat:null, confirm:null, sel:null, selMenu:false, selDel:false, rtEdit:null,
   gMetric:null, gRange:'6M', trendRange:'1M', ver:0, timer:null, importing:null,
   athletes:{}, custom:{}, routines:{}, installEvt:null
 };
@@ -1006,17 +1023,21 @@ function vToday(){
 function vLog(){
   const I = ix(S.aid), u = unit(), d = S.date, day = getDay(S.aid, d), ds = I.dayStats[d], st = I.dayStrain[d] || 0;
   const entries = day ? day.entries : [];
-  const list = entries.length ? entries.map(e => entryHTML(e, I, d, u, 'openex')).join('') : `<p class="empty" style="text-align:center;padding:28px 0 10px">Nothing logged on this day.</p>`;
+  const sel = selOn() ? S.sel.idx : null;
+  const list = entries.length ? entries.map((e, i) => entryHTML(e, I, d, u, 'openex', i, sel)).join('') : `<p class="empty" style="text-align:center;padding:28px 0 10px">Nothing logged on this day.</p>`;
   const rpe = day && day.rpe;
   return vLogBody(d, I, u, day, ds, st, entries, list, rpe);
 }
-function entryHTML(e, I, d, u, act){
+function entryHTML(e, I, d, u, act, i, sel){
     const m = exMeta(e.ex), h = (I.byEx[e.ex]||[]).find(x => x.date === d), sets = Array.isArray(e.sets) ? e.sets.filter(x => x && typeof x === 'object') : [];
     const notes = sets.map(s => s.note).filter(Boolean);
-    return `<button class="entry" data-act="${act}" data-v="${esc(e.ex)}" aria-label="${esc(m.name)}, ${sets.length} sets"><div class="entry-h"><b>${esc(m.name)}</b><span>${sets.length ? `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}` : CATS[m.cat].name}</span></div>
+    const on = sel && sel.includes(i);
+    return `<button class="entry${sel ? ' selmode' : ''}${on ? ' sel' : ''}" data-act="${act}" data-v="${esc(e.ex)}"${i != null ? ` data-i="${i}"` : ''}${sel ? ` aria-pressed="${!!on}"` : ''} aria-label="${esc(m.name)}, ${sets.length} sets"><div class="entry-h">${sel ? `<i class="ck" aria-hidden="true">${on ? IC.check : ''}</i>` : ''}<b>${esc(m.name)}</b><span>${sets.length ? `${sets.length} ${sets.length === 1 ? 'set' : 'sets'}` : CATS[m.cat].name}</span></div>
       ${sets.length ? `<div class="sline">${groupSets(sets, m.type, u, h ? h.prIdx : -1)}</div>${notes.length ? `<div class="enote">${esc(notes.join(' · '))}</div>` : ''}` : `<p class="muted small">No sets yet. Tap to log.</p>`}</button>`;
 }
 function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
+  if (selOn()) return vLogSel(d, ds, u, entries, list);
+  const delKey = S.confirm && S.confirm.startsWith('delall') && S.confirm.endsWith(':' + d) ? S.confirm.slice(0, 7) : '';
   return `<div class="wrap">${banners()}
     <div class="dayhdr"><button class="icon-btn" data-act="day" data-v="-1" aria-label="Previous day">${IC.back}</button>
       <div class="daylbl"><h1>${relDay(d)}</h1><p class="sub">${parseISO(d).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})}</p><input type="date" id="datepick" value="${d}" data-ch="date" aria-label="Pick a date"></div>
@@ -1031,8 +1052,35 @@ function vLogBody(d, I, u, day, ds, st, entries, list, rpe){
     ${entries.length && scoresOn() ? `<section class="tile" style="margin-top:14px"><h2>How hard was it?</h2>
       <div class="field"><span>Session effort, 1 easy to 10 max${rpe ? ` · ${rpe}` : ''}</span><div class="seg">${[1,2,3,4,5,6,7,8,9,10].map(n => `<button class="${rpe===n?'on':''}" data-act="rpe" data-v="${n}">${n}</button>`).join('')}</div></div>
       <label class="field"><span>Workout note</span><textarea class="txt" id="wnote" data-ch="wnote" maxlength="600">${esc(day.note||'')}</textarea></label></section>` : ''}
+    ${entries.length ? `<div class="delall"><button class="tbtn" data-act="delall">${delKey === 'delall1' ? `Delete all ${entries.length} exercises? Tap to confirm` : delKey === 'delall2' ? 'Tap once more. This can’t be undone.' : 'Delete all exercises'}</button></div>` : ''}
   </div>`;
 }
+// Select mode: a long press on an exercise starts it, taps then pick exercises, and More copies or deletes them.
+const selOn = () => !!(S.sel && S.sel.aid === S.aid && S.sel.d === S.date && S.view === 'log');
+function vLogSel(d, ds, u, entries, list){
+  const n = S.sel.idx.length, all = n === entries.length;
+  const menu = S.selMenu ? `<div class="menu-scrim" data-act="selmenuclose"></div><div class="menu" role="menu">
+    <button role="menuitem" data-act="selall">${all ? 'Select none' : 'Select all'}</button>
+    <button role="menuitem" data-act="selcopy">Copy to another day</button>
+    <button role="menuitem" data-act="seldel" style="color:var(--red)">${S.selDel ? 'Tap again to delete' : `Delete ${n === 1 ? 'exercise' : n + ' exercises'}`}</button></div>` : '';
+  return `<div class="wrap">${banners()}
+    <div class="selbar"><button class="icon-btn" data-act="selx" aria-label="Done selecting">${IC.x}</button>
+      <div class="daylbl"><h1>${n} selected</h1><p class="sub">${relDay(d)}</p></div>
+      <button class="icon-btn" data-act="selmenu" aria-label="More" aria-expanded="${!!S.selMenu}">${IC.dots}</button>${menu}</div>
+    <div class="entries">${list}</div>
+  </div>`;
+}
+function enterSel(i){
+  if (S.sel || S.sheet || S.view !== 'log') return;
+  const day = getDay(S.aid, S.date); if (!day || !day.entries[i]) return;
+  blurActive(); S.confirm = null; S.sel = {aid:S.aid, d:S.date, idx:[i]}; S.selMenu = false; S.selDel = false;
+  try { history.pushState({sheet:true, sel:true}, ''); } catch {}
+  try { if (NA) NA.vibrate(JSON.stringify([20])); else navigator.vibrate && navigator.vibrate(20); } catch {}
+  render();
+}
+function exitSel(){ if (!S.sel) return; const n = ourDepth(); S.sel = null; S.selMenu = false; S.selDel = false; S.dlg = null; popOurs(n); render(); }
+// Indices still pointing at exercises on the selected day, in order.
+function selIdx(){ const day = getDay(S.aid, S.date), len = day ? day.entries.length : 0; return S.sel.idx.filter(i => i < len).sort((a,b) => a-b); }
 
 /* ---------- calendar ---------- */
 function vCal(){
@@ -1344,7 +1392,7 @@ function vMore(){
   return `<div class="wrap">${banners()}${topbar('More', '')}
     ${install}
     <div class="section"><div class="rowsb"><h2>Routines</h2><span class="meta">${routines.length || ''}</span></div><section class="tile">
-      ${routines.length ? `<div class="list">${rShown.map(([id,r]) => `<div class="lrow"><div class="grow"><div style="font-weight:600">${esc(r.name)}</div><div class="meta">${(r.exs||[]).map(x => esc(exMeta(x).name)).join(', ')}</div></div><button class="link danger" data-act="delrt" data-v="${esc(id)}">${S.confirm==='delrt'+id ? 'Confirm' : 'Delete'}</button></div>`).join('')}</div>${showAll('routines', routines.length)}` : '<p class="empty">Save a workout as a routine from the Log tab.</p>'}</section></div>
+      ${routines.length ? `<div class="list">${rShown.map(([id,r]) => rtRow(id, r, false)).join('')}</div>${showAll('routines', routines.length)}` : '<p class="empty">Save a workout as a routine from the Log tab.</p>'}</section></div>
     <div class="section"><div class="rowsb"><h2>Exercises</h2><button class="link" data-act="newex">New exercise</button></div><section class="tile">
       ${customs.length ? `<div class="list">${cShown.map(m => `<div class="lrow"><div class="grow"><div>${esc(m.name)}</div><div class="meta">${CATS[m.cat].name} · ${TYPES[m.type]}</div></div>${used.has(m.id) ? '<span class="meta">In use</span>' : `<button class="link danger" data-act="delex" data-v="${esc(m.id)}">Delete</button>`}</div>`).join('')}</div>${showAll('exercises', customs.length)}` : `<p class="empty">${Object.keys(BUILTIN).length} exercises are built in. Add any that are missing.</p>`}</section></div>
     <div class="section"><h2>${ids.length > 1 ? 'Profiles' : 'Profile'}</h2><div class="grid two">${prof}
@@ -1607,10 +1655,19 @@ function shCopy(){
     ${mine.length ? `<div class="list">${mine.map(row).join('')}</div>` : '<p class="empty">No earlier workouts yet.</p>'}
     ${theirs.length ? `<h3 style="margin-top:8px">From other profiles</h3><div class="list">${theirs.map(row).join('')}</div>` : ''}</div>`;
 }
+// One routine row. Edit opens rename and delete in place; in the Routines sheet the row also loads the routine.
+function rtRow(id, r, load){
+  const exs = (r.exs||[]).map(x => esc(exMeta(x).name)).join(', '), v = esc(id);
+  if (S.rtEdit === id) return `<div class="rtedit"><input class="txt" id="rt-edit" maxlength="40" value="${esc(r.name)}" aria-label="Routine name" autocomplete="off"><div class="meta">${exs}</div>
+    <div class="row"><button class="link danger" data-act="delrt" data-v="${v}" style="min-height:44px">${S.confirm === 'delrt'+id ? 'Tap again to delete' : 'Delete'}</button><span style="flex:1"></span><button class="btn" data-act="rtcancel">Cancel</button><button class="btn primary" data-act="rtsave" data-v="${v}">Save</button></div></div>`;
+  const body = `<div style="font-weight:600">${esc(r.name)}</div><div class="meta">${exs}</div>`;
+  return `<div class="lrow">${load ? `<button class="grow" style="text-align:left" data-act="applyrt" data-v="${v}" aria-label="Load ${esc(r.name)}">${body}</button>` : `<div class="grow">${body}</div>`}
+    <div class="rtlinks"><button class="link" data-act="rtedit" data-v="${v}" aria-label="Edit ${esc(r.name)}">Edit</button>${load ? `<button class="link" data-act="applyrt" data-v="${v}">Load</button>` : ''}</div></div>`;
+}
 function shRoutines(){
   const day = getDay(S.aid, S.date), rs = Object.entries(S.routines).sort((a,b) => a[1].name.localeCompare(b[1].name));
   return sheetTop('Routines', relDay(S.date)) + `<div class="sh-body">
-    ${rs.length ? `<div class="list">${rs.map(([id,r]) => `<button class="lrow" data-act="applyrt" data-v="${esc(id)}"><div class="grow"><div style="font-weight:600">${esc(r.name)}</div><div class="meta">${(r.exs||[]).map(x => esc(exMeta(x).name)).join(', ')}</div></div><span class="link">Load</span></button>`).join('')}</div>` : '<p class="empty">No routines yet.</p>'}
+    ${rs.length ? `<div class="list">${rs.map(([id,r]) => rtRow(id, r, true)).join('')}</div>` : '<p class="empty">No routines yet.</p>'}
     ${day && day.entries.length ? `<section class="tile"><label class="field"><span>Save this day's ${day.entries.length} exercises as a routine</span><div class="row"><input class="txt" id="rt-name" maxlength="40" placeholder="Name, like Push day"><button class="btn" data-act="savert">Save</button></div></label></section>` : '<p class="muted">Log a workout first, then save its exercises here as a routine.</p>'}</div>`;
 }
 /* ---------- calculators (opened from the exercise menu) ---------- */
@@ -1679,6 +1736,14 @@ function dlgHTML(){
       <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="goalsave">Save goal</button></div>
       ${goalOf(S.aid) != null ? `<button class="link danger" data-act="goalclear" style="align-self:center;padding:6px">Remove goal</button>` : ''}`;
   }
+  if (D.kind === 'selcopy') {
+    const n = selIdx().length, ids = athleteIds();
+    return `<h2 id="dlg-t">Copy ${n === 1 ? 'exercise' : n + ' exercises'}</h2>
+      <label class="field"><span>To</span><input class="txt" type="date" id="dl-seldate" data-ch="seldate" value="${esc(D.date)}"></label>
+      ${ids.length > 1 ? `<div class="field"><span>Profile</span><div class="chips">${ids.map(id => `<button class="chip ${D.to===id?'on':''}" data-act="selto" data-v="${esc(id)}">${esc(S.athletes[id].name)}</button>`).join('')}</div></div>` : ''}
+      <p class="muted small">Sets come too. An exercise already on that day gets the sets added.</p>
+      <div class="dbtns"><button class="btn" data-act="dlgclose">Cancel</button><button class="btn primary" data-act="dosel">Copy</button></div>`;
+  }
   if (D.kind === '1rm') return `<h2 id="dlg-t">1RM Calculator</h2>${dstepper('w', `Weight (${U})`, 'decimal')}${dstepper('r', 'Reps', 'numeric')}<div id="dl-out">${dlgOut()}</div><div class="dbtns"><button class="btn" data-act="dlgclose">Close</button></div>`;
   if (D.kind === 'set') {
     const best = S.sheet && S.sheet.ex ? bestE1(S.sheet.ex) : 0;
@@ -1696,7 +1761,7 @@ function dlgHTML(){
 }
 function renderDlg(){
   const el = $('#dlg');
-  if (!S.dlg || (!S.sheet && !/^bw/.test(S.dlg.kind))) { S.dlg = null; el.hidden = true; el.innerHTML = ''; return; }
+  if (!S.dlg || (!S.sheet && !/^bw/.test(S.dlg.kind) && !(S.dlg.kind === 'selcopy' && S.sel))) { S.dlg = null; el.hidden = true; el.innerHTML = ''; return; }
   el.innerHTML = `<div class="dscrim" data-act="dlgclose"></div><div class="dbox" role="dialog" aria-modal="true" aria-labelledby="dlg-t">${dlgHTML()}</div>`;
   el.hidden = false;
 }
@@ -1710,7 +1775,7 @@ function openSheet(obj){ if (!S.sheet) { try { history.pushState({sheet:true}, '
 let backPending = false;
 const ourDepth = () => { const st = history.state || {}; return st.dlg ? (st.sheet === false ? 1 : 2) : st.sheet ? 1 : 0; };
 function popOurs(n){ if (backPending || !n) return; backPending = true; try { history.go(-n); } catch { backPending = false; } }
-function clearSheet(){ S.menu = false; S.dlg = null; S.sheet = null; S.confirm = null; S.editIdx = null; releaseAwake(); }
+function clearSheet(){ S.menu = false; S.dlg = null; S.sheet = null; S.confirm = null; S.editIdx = null; S.rtEdit = null; releaseAwake(); }
 function dropSheet(){ const n = ourDepth(); clearSheet(); popOurs(n); }
 // Close any sheet and show a view. When the view changes, the sheet's history entry is reused for it.
 function navTo(hash){
@@ -1718,7 +1783,7 @@ function navTo(hash){
   if ('#' + hash !== location.hash) { if (n) { try { history.replaceState(null, '', '#' + hash); } catch {} route(); } else location.hash = hash; }
   else { popOurs(n); render(); window.scrollTo(0,0); }
 }
-window.addEventListener('popstate', () => { backPending = false; if (S.dlg) { S.dlg = null; render(); return; } if (S.sheet) { clearSheet(); render(); } });
+window.addEventListener('popstate', () => { backPending = false; if (S.dlg) { S.dlg = null; render(); return; } if (S.sheet) { clearSheet(); render(); return; } if (S.sel) { S.sel = null; S.selMenu = false; S.selDel = false; render(); } });
 function openEx(ex, tab){ openSheet({kind:'ex', ex, tab:tab||'track'}); S.editIdx = null; S.confirm = null; S.gMetric = null; S.draft = defaultDraft(ex); render(); keepAwake(); }
 function setToDraft(s, u){ if (!s) return {w:'', r:'', d:'', t:'', note:''}; return {w:s.w != null ? String(wRaw(s.w,u)) : '', r:s.r != null ? String(s.r) : '', d:s.d ? String(dRaw(s.d,u)) : '', t:s.t ? fmtDur(s.t) : '', note:''}; }
 function defaultDraft(ex){
@@ -1754,7 +1819,7 @@ const ACT = {
   install(){ const e = S.installEvt; if (!e) return; e.prompt(); e.userChoice.finally(() => { S.installEvt = null; render(); }); },
   gotoToday(){ S.date = today(); navTo('log'); },
   goto(el){ S.date = el.dataset.v; navTo('log'); },
-  day(el){ S.date = addDays(S.date, +el.dataset.v); render(); },
+  day(el){ exitSel(); S.date = addDays(S.date, +el.dataset.v); render(); },
   cal(el){ const v = +el.dataset.v, secs = calSections(), i = secs.findIndex(x => x.dataset.ym === S.calMonth); const target = !v ? today().slice(0,7) : secs[clamp(i + v, 0, secs.length-1)] && secs[clamp(i + v, 0, secs.length-1)].dataset.ym; if (target) scrollToMonth(target, true); },
   calmore(){ S.calBack = (S.calBack||0) + 24; const keep = S.calMonth; render(); scrollToMonth(keep, false); },
   trange(el){ S.trendRange = el.dataset.v; render(); },
@@ -1874,7 +1939,49 @@ const ACT = {
   routines(){ openSheet({kind:'routines'}); render(); },
   applyrt(el){ const r = S.routines[el.dataset.v]; if (!r) return; const day = cloneDay(S.aid, S.date); (r.exs||[]).forEach(x => { if (!day.entries.find(e => e.ex === x)) day.entries.push({ex:x, sets:[]}); }); dropSheet(); saveDay(S.aid, S.date, day); toast(`Loaded ${r.name}`); },
   savert(){ const name = $('#rt-name').value.trim(); if (!name) return toast('Name the routine first.', 'err'); const day = getDay(S.aid, S.date); patchDoc('library/routines', {items:{['r'+uid()]:{name, exs:day.entries.map(e => e.ex)}}}); toast(`Saved ${name}`); },
-  delrt(el){ const k = 'delrt'+el.dataset.v; if (S.confirm !== k) { S.confirm = k; render(); return; } S.confirm = null; patchDoc('library/routines', {items:{[el.dataset.v]:null}}); },
+  delrt(el){ const k = 'delrt'+el.dataset.v; if (S.confirm !== k) { S.confirm = k; render(); return; } S.confirm = null; S.rtEdit = null; blurActive(); const r = S.routines[el.dataset.v]; patchDoc('library/routines', {items:{[el.dataset.v]:null}}); if (r) toast(`Deleted ${r.name}`); },
+  rtedit(el){ if (!S.routines[el.dataset.v]) return; S.rtEdit = el.dataset.v; render(); const i = $('#rt-edit'); if (i) { i.focus(); try { i.select(); } catch {} } },
+  rtcancel(){ blurActive(); S.rtEdit = null; render(); },
+  rtsave(el){ const id = el.dataset.v, i = $('#rt-edit'), name = i ? i.value.trim().slice(0,40) : ''; if (!S.routines[id]) { S.rtEdit = null; render(); return; } if (!name) return toast('Name the routine first.', 'err'); blurActive(); S.rtEdit = null; if (name !== S.routines[id].name) { patchDoc('library/routines', {items:{[id]:{name}}}); toast(`Renamed to ${name}`); } else render(); },
+  // Select mode in the Log
+  selx(){ exitSel(); },
+  selmenu(){ S.selMenu = !S.selMenu; S.selDel = false; render(); },
+  selmenuclose(){ S.selMenu = false; S.selDel = false; render(); },
+  selall(){ const day = getDay(S.aid, S.date), len = day ? day.entries.length : 0; S.sel.idx = S.sel.idx.length === len ? [] : [...Array(len).keys()]; S.selMenu = false; render(); },
+  seldel(){
+    const idx = selIdx(); if (!idx.length) { S.selMenu = false; render(); return toast('Select an exercise first.', 'err'); }
+    if (!S.selDel) { S.selDel = true; render(); return; }
+    const day = cloneDay(S.aid, S.date); day.entries = day.entries.filter((e, i) => !idx.includes(i));
+    if (!day.entries.length) { day.note = ''; day.rpe = null; }
+    exitSel(); saveDay(S.aid, S.date, day); toast(`Deleted ${idx.length === 1 ? 'exercise' : idx.length + ' exercises'}`);
+  },
+  selcopy(){
+    if (!selIdx().length) { S.selMenu = false; render(); return toast('Select an exercise first.', 'err'); }
+    const t = today(); S.selMenu = false; S.selDel = false;
+    S.dlg = {kind:'selcopy', u:unit(), date: S.date === t ? addDays(t, 1) : t, to:S.aid};
+    try { history.pushState({dlg:true, sheet:true}, ''); } catch {}
+    render();
+  },
+  selto(el){ if (S.dlg && S.athletes[el.dataset.v]) { S.dlg.to = el.dataset.v; renderDlg(); } },
+  dosel(){
+    const D = S.dlg, idx = selIdx(), date = D && D.date;
+    if (!D || !idx.length) return exitSel();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return toast('Pick a day.', 'err');
+    if (D.to === S.aid && date === S.date) return toast('Pick a different day.', 'err');
+    const src = getDay(S.aid, S.date), day = cloneDay(D.to, date);
+    for (const i of idx) { const e = src.entries[i], sets = JSON.parse(JSON.stringify(e.sets||[])).filter(x => x && typeof x === 'object'), ex = day.entries.find(x => x.ex === e.ex); if (ex) ex.sets = (ex.sets||[]).concat(sets); else day.entries.push({ex:e.ex, sets}); }
+    const to = D.to; exitSel(); saveDay(to, date, day);
+    toast(`Copied ${idx.length === 1 ? 'exercise' : idx.length + ' exercises'} to ${fmtDateLong(date)}${to !== S.aid ? ' for ' + S.athletes[to].name : ''}`);
+  },
+  delall(){
+    const d = S.date, day = getDay(S.aid, d); if (!day || !day.entries.length) return;
+    if (S.confirm !== 'delall1:'+d && S.confirm !== 'delall2:'+d) { S.confirm = 'delall1:'+d; render(); return; }
+    if (S.confirm === 'delall1:'+d) { S.confirm = 'delall2:'+d; render(); return; }
+    S.confirm = null; const n = day.entries.length, c = cloneDay(S.aid, d);
+    c.entries = []; c.note = ''; c.rpe = null; c.t0 = null; c.t1 = null;
+    if (S.noteOpen === d) S.noteOpen = null;
+    saveDay(S.aid, d, c); toast(`Deleted ${n === 1 ? '1 exercise' : n + ' exercises'}`);
+  },
   setme(el){ for (const id of athleteIds()) if (S.athletes[id].me && id !== el.dataset.v) patchDoc(`athletes/${id}`, {me:false}); patchDoc(`athletes/${el.dataset.v}`, {me:true}); S.aid = el.dataset.v; pref.set('aid', S.aid); toast('Liftlog will open to this profile'); },
   acolor(el){ patchDoc(`athletes/${el.dataset.v}`, {color:el.dataset.c}); },
   aset(el){ const k = el.dataset.k, x = el.dataset.x; patchDoc(`athletes/${el.dataset.v}`, {[k]: k==='unit' ? x : k==='scores' ? x==='1' : +x}); },
@@ -2180,13 +2287,36 @@ document.addEventListener('click', ev => {
   if (navA && navA.dataset.nav === S.view && !S.sheet) { ev.preventDefault(); if (S.view === 'calendar') scrollToMonth(today().slice(0,7), true); else window.scrollTo({top:0, behavior:'smooth'}); return; }
   if (ev.target.id === 'datepick') { try { ev.target.showPicker && ev.target.showPicker(); } catch {} }
   const el = ev.target.closest('[data-act]'); if (!el) return;
+  if (selOn() && el.dataset.act === 'openex' && el.dataset.i != null) { const i = +el.dataset.i, x = S.sel.idx; S.sel.idx = x.includes(i) ? x.filter(j => j !== i) : x.concat(i); S.selMenu = false; S.selDel = false; render(); return; }
   const fn = ACT[el.dataset.act]; if (!fn) return;
   if (el.tagName === 'A') ev.preventDefault();
-  if (!/^(removeex|delath|delrt|addfreeze)$/.test(el.dataset.act)) S.confirm = null;
+  if (!/^(removeex|delath|delrt|addfreeze|delall)$/.test(el.dataset.act)) S.confirm = null;
   fn(el, ev);
 });
+// Long press on an exercise in the Log starts select mode. The click that ends the press is swallowed.
+let lpT = null, lpX = 0, lpY = 0, lpSwallow = false;
+const lpCancel = () => { clearTimeout(lpT); lpT = null; };
+document.addEventListener('pointerdown', ev => {
+  lpSwallow = false; lpCancel();
+  if (S.view !== 'log' || S.sheet || S.sel || ev.button > 0) return;
+  const en = ev.target.closest('.entries .entry[data-i]'); if (!en) return;
+  lpX = ev.clientX; lpY = ev.clientY;
+  lpT = setTimeout(() => { lpT = null; lpSwallow = true; enterSel(+en.dataset.i); }, 450);
+}, true);
+document.addEventListener('pointermove', ev => { if (lpT && Math.hypot(ev.clientX - lpX, ev.clientY - lpY) > 10) lpCancel(); }, true);
+document.addEventListener('pointerup', lpCancel, true);
+document.addEventListener('pointercancel', lpCancel, true);
+window.addEventListener('scroll', lpCancel, {passive:true});
+document.addEventListener('click', ev => { if (lpSwallow) { lpSwallow = false; ev.preventDefault(); ev.stopPropagation(); } }, true);
+document.addEventListener('contextmenu', ev => {
+  const en = ev.target.closest && ev.target.closest('.entries .entry[data-i]'); if (!en) return;
+  ev.preventDefault(); if (!S.sel && S.view === 'log' && !S.sheet) { lpCancel(); lpSwallow = true; enterSel(+en.dataset.i); }
+});
 document.addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' && ev.target.id === 'rt-edit') { ev.preventDefault(); const b = $('[data-act="rtsave"]'); if (b) ACT.rtsave(b); return; }
+  if (ev.key === 'Escape' && ev.target.id === 'rt-edit') { ACT.rtcancel(); return; }
   if (ev.key === 'Escape' && S.dlg) { closeDlg(); return; }
+  if (ev.key === 'Escape' && S.sel) { if (S.selMenu) ACT.selmenuclose(); else exitSel(); return; }
   if (ev.key === 'Escape' && S.menu) { S.menu = false; render(); return; }
   if (ev.key === 'Escape' && S.sheet) { ACT.close(); return; }
   if (ev.key === 'Enter' && S.sheet && S.sheet.kind === 'ex' && ev.target.closest && ev.target.closest('.fields, #in-note')) { ev.preventDefault(); ev.target.blur(); ACT.saveset(); }
@@ -2199,7 +2329,8 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const el = ev.target, k = el.dataset.ch; if (!k) return;
-  if (k === 'date' && el.value) { S.date = el.value; render(); }
+  if (k === 'date' && el.value) { exitSel(); S.date = el.value; render(); }
+  else if (k === 'seldate' && S.dlg) S.dlg.date = el.value;
   else if (k === 'wnote') { const day = cloneDay(S.aid, S.date); if ((day.note||'') !== el.value) { day.note = el.value.slice(0,600); saveDay(S.aid, S.date, day); } }
   else if (k === 'bwdate' && S.dlg && el.value) { S.dlg.date = el.value; const at = bodyList(S.aid).find(e => e.d === el.value); if (at) S.dlg.bw = String(wRaw(at.kg, S.dlg.u)); renderDlg(); }
   else if (k === 'aname') { const v = el.value.trim(); if (v) patchDoc(`athletes/${el.dataset.v}`, {name:v.slice(0,30)}); }
@@ -2209,7 +2340,7 @@ document.addEventListener('change', ev => {
   else if (k === 'bkreplace' && el.files && el.files[0]) loadBackup(el.files[0], 'replace');
   if (el.type === 'file') el.value = '';
 });
-function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; S.confirm = null; if (S.sheet) clearSheet(); if (S.view === 'calendar') S.calJump = true; render(); if (S.view !== 'calendar') window.scrollTo(0,0); }
+function route(){ const h = (location.hash || '').slice(1); S.view = VIEWS[h] ? h : 'today'; S.confirm = null; S.sel = null; S.selMenu = false; S.rtEdit = null; if (S.sheet) clearSheet(); if (S.view === 'calendar') S.calJump = true; render(); if (S.view !== 'calendar') window.scrollTo(0,0); }
 window.addEventListener('hashchange', route);
 let rzT; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(drawCharts, 150); });
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.view === 'more') render(); });
